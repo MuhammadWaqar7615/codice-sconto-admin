@@ -9,10 +9,10 @@ export default function RegisterPage() {
       <main className="flex-grow flex items-center justify-center font-arial px-4 py-3">
         {/* Register Card */}
         <div className="w-full max-w-[750px] bg-white rounded shadow-sm overflow-hidden">
-          
+
           {/* Card Content Padding */}
           <div className="px-10 py-12 sm:px-[60px]">
-            
+
             {/* Logo */}
             <div className="flex justify-center mb-6">
               {/* TODO: Replace placeholder with original image */}

@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
+
 import { AUTH_TOKEN_STORAGE_KEY } from "@/config/auth";
 
 export default function LoginPage() {
@@ -44,7 +43,6 @@ export default function LoginPage() {
   };
   return (
     <div className="flex flex-col min-h-screen bg-section-light">
-      <Navbar />
 
       <main className="flex-grow flex items-center justify-center font-arial px-4 py-3">
         {/* Login Card */}
@@ -182,7 +180,6 @@ export default function LoginPage() {
         </div>
       </main>
 
-      <Footer />
     </div>
   );
 }

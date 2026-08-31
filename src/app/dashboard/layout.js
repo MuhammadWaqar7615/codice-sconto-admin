@@ -2,7 +2,7 @@ import Sidebar from "@/components/admin/Sidebar";
 
 export default function DashboardLayout({ children }) {
   return (
-    <div className="flex min-h-screen bg-gray-50 text-gray-900">
+    <div className="flex flex-col md:flex-row min-h-screen bg-gray-50 text-gray-900">
       <Sidebar />
 
       <main className="min-w-0 flex-1 overflow-y-auto">
