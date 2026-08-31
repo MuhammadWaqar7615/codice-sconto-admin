@@ -18,6 +18,8 @@ export default function NewStorePage() {
     name: "",
     slug: "",
     description: "",
+    seoTitle: "",
+    seoDescription: "",
     websiteUrl: "",
     categories: [],
     subcategories: [],
@@ -206,6 +208,35 @@ export default function NewStorePage() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label htmlFor="seoTitle" className="block text-sm font-medium text-gray-700 mb-1">
+                    SEO Title
+                  </label>
+                  <input
+                    type="text"
+                    id="seoTitle"
+                    name="seoTitle"
+                    value={formData.seoTitle}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="seoDescription" className="block text-sm font-medium text-gray-700 mb-1">
+                    SEO Description
+                  </label>
+                  <textarea
+                    id="seoDescription"
+                    name="seoDescription"
+                    rows={3}
+                    value={formData.seoDescription}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all resize-y"
+                  ></textarea>
+                </div>
               </div>
 
               {/* Description */}

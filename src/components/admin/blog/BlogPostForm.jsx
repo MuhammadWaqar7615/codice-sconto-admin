@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-const emptyPost = { title: "", description: "", image: "", imagePublicId: "", status: "enabled" };
+const emptyPost = { title: "", description: "", seoTitle: "", seoDescription: "", image: "", imagePublicId: "", status: "enabled" };
 
 export default function BlogPostForm({ post }) {
   const router = useRouter();
@@ -94,10 +94,21 @@ export default function BlogPostForm({ post }) {
             <label htmlFor="description" className="mb-1 block text-sm font-medium text-gray-700">Description *</label>
             <textarea id="description" name="description" required rows="6" value={formData.description} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
           </div>
-          
+
+          <section className="grid gap-6 border-t border-gray-100 pt-6 md:grid-cols-2">
+            <div>
+              <label htmlFor="seoTitle" className="mb-1 block text-sm font-medium text-gray-700">SEO title</label>
+              <input id="seoTitle" name="seoTitle" value={formData.seoTitle} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
+            </div>
+            <div>
+              <label htmlFor="status" className="mb-1 block text-sm font-medium text-gray-700">Status</label>
+              <select id="status" name="status" value={formData.status} onChange={handleChange} className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 outline-none focus:border-accent focus:ring-2 focus:ring-accent"><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select>
+            </div>
+          </section>
+
           <div>
-            <label htmlFor="status" className="mb-1 block text-sm font-medium text-gray-700">Status</label>
-            <select id="status" name="status" value={formData.status} onChange={handleChange} className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 outline-none focus:border-accent focus:ring-2 focus:ring-accent"><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select>
+            <label htmlFor="seoDescription" className="mb-1 block text-sm font-medium text-gray-700">SEO description</label>
+            <textarea id="seoDescription" name="seoDescription" rows="3" value={formData.seoDescription} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
           </div>
           
           <section className="border-t border-gray-100 pt-6">

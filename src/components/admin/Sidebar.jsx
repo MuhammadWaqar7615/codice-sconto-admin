@@ -7,6 +7,12 @@ import { AUTH_TOKEN_STORAGE_KEY } from '@/config/auth';
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: '⌂' },
+  { name: 'SEO Dashboard', href: '/dashboard/seo/dashboard', icon: '◫' },
+  { name: 'SEO Settings', href: '/dashboard/seo/global', icon: '⚑' },
+  { name: 'Page SEO', href: '/dashboard/seo/pages', icon: '▣' },
+  { name: 'Redirects', href: '/dashboard/seo/redirects', icon: '↗' },
+  { name: 'Sitemap', href: '/dashboard/seo/sitemap', icon: '⌁' },
+  { name: 'Robots.txt', href: '/dashboard/seo/robots', icon: '⎈' },
   { name: 'Coupons', href: '/dashboard/coupons', icon: '◫' },
   { name: 'Categories', href: '/dashboard/categories', icon: '▣' },
   { name: 'Subcategories', href: '/dashboard/subcategories', icon: '▤' },

@@ -71,7 +71,11 @@ export async function POST(request) {
       );
     }
 
-    const newStore = await Store.create(data);
+    const newStore = await Store.create({
+      ...data,
+      seoTitle: data.seoTitle,
+      seoDescription: data.seoDescription,
+    });
     return NextResponse.json({ store: newStore }, { status: 201 });
   } catch (error) {
     console.error("POST /api/stores Error:", error);

@@ -50,7 +50,19 @@ export async function PUT(request, { params }) {
       }
     }
 
-    const post = await BlogPost.findByIdAndUpdate(id, { title: body.title, description: body.description, image: body.image, imagePublicId: body.imagePublicId, status: body.status }, { new: true, runValidators: true }).lean();
+    const post = await BlogPost.findByIdAndUpdate(
+      id,
+      {
+        title: body.title,
+        description: body.description,
+        seoTitle: body.seoTitle,
+        seoDescription: body.seoDescription,
+        image: body.image,
+        imagePublicId: body.imagePublicId,
+        status: body.status,
+      },
+      { new: true, runValidators: true }
+    ).lean();
     if (!post) return NextResponse.json({ message: "Blog post not found" }, { status: 404 });
     return NextResponse.json({ post });
   } catch (error) {

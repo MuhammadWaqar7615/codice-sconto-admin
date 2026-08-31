@@ -27,6 +27,16 @@ const storeSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    seoTitle: {
+      type: String,
+      trim: true,
+      maxlength: 160,
+    },
+    seoDescription: {
+      type: String,
+      trim: true,
+      maxlength: 320,
+    },
     websiteUrl: {
       type: String,
       trim: true,
