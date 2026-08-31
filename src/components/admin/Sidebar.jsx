@@ -1,84 +1,93 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { AUTH_TOKEN_STORAGE_KEY } from '@/config/auth';
+
+const navItems = [
+  { name: 'Dashboard', href: '/dashboard', icon: '⌂' },
+  { name: 'Coupons', href: '/dashboard/coupons', icon: '◫' },
+  { name: 'Categories', href: '/dashboard/categories', icon: '▣' },
+  { name: 'Subcategories', href: '/dashboard/subcategories', icon: '▤' },
+  { name: 'Sliders', href: '/dashboard/sliders', icon: '▨' },
+  { name: 'Promo banners', href: '/dashboard/promo-banners', icon: '▣' },
+  { name: 'Badges', href: '/dashboard/badges', icon: '★' },
+  { name: 'Blog', href: '/dashboard/blog', icon: '✎' },
+  { name: 'Users', href: '/dashboard/users', icon: '◔' },
+  { name: 'Public stores', href: '/negozi', icon: '⌂' },
+  { name: 'Public offers', href: '/offerte', icon: '◌' },
+];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
 
-  // Close sidebar on route change on mobile
-  useEffect(() => {
-    setIsOpen(false);
-  }, [pathname]);
-
   const handleLogout = () => {
     window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   };
 
-  const navItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: 'D' },
-    { name: 'Coupons', href: '/dashboard/coupons', icon: 'C' },
-    { name: 'Categories', href: '/dashboard/categories', icon: 'K' },
-    { name: 'Subcategories', href: '/dashboard/subcategories', icon: 'S' },
-    { name: 'Sliders', href: '/dashboard/sliders', icon: 'L' },
-    { name: 'Promo banners', href: '/dashboard/promo-banners', icon: 'P' },
-    { name: 'Badges', href: '/dashboard/badges', icon: 'B' },
-    { name: 'Blog', href: '/dashboard/blog', icon: 'G' },
-    { name: 'Users', href: '/dashboard/users', icon: 'U' },
-    { name: 'Public stores', href: '/negozi', icon: 'S' },
-    { name: 'Public offers', href: '/offerte', icon: 'O' },
-  ];
-
   return (
     <>
-      {/* Mobile Top Bar */}
-      <div className="md:hidden flex items-center justify-between bg-white border-b border-gray-200 px-4 h-16 sticky top-0 z-20 shadow-sm w-full">
-        <h1 className="text-xl font-bold text-gray-800">Admin Panel</h1>
-        <button 
+      <div className="fixed left-0 right-0 top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 shadow-sm backdrop-blur-sm lg:hidden">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Admin</p>
+          <h1 className="text-lg font-bold text-slate-900">CodiceSconto</h1>
+        </div>
+        <button
+          type="button"
           onClick={() => setIsOpen(true)}
-          className="text-gray-600 hover:text-gray-900 focus:outline-none p-2 -mr-2"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
           aria-label="Open sidebar menu"
+          aria-expanded={isOpen}
         >
-          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h16" />
           </svg>
         </button>
       </div>
 
-      {/* Mobile Overlay */}
       {isOpen && (
-        <div 
-          className="md:hidden fixed inset-0 z-30 bg-black/50 transition-opacity"
+        <button
+          type="button"
+          aria-label="Close sidebar overlay"
           onClick={() => setIsOpen(false)}
-          aria-hidden="true"
+          className="fixed inset-0 z-20 bg-slate-900/40 lg:hidden"
         />
       )}
 
-      {/* Sidebar Drawer */}
-      <aside 
-        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-64 shrink-0 flex-col border-r border-gray-200 bg-white shadow-sm transition-transform duration-300 ease-in-out md:sticky md:top-0 md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      <aside
+        className={`fixed inset-y-0 left-0 z-30 flex h-full w-[280px] -translate-x-full flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:z-10 lg:w-72 lg:translate-x-0 ${isOpen ? 'translate-x-0' : ''}`}
       >
-        {/* Logo Area */}
-        <div className="h-16 flex items-center justify-between md:justify-center px-4 md:px-0 border-b border-gray-200 shrink-0">
-          <h1 className="text-xl font-bold text-gray-800 hidden md:block">Admin Panel</h1>
-          <h1 className="text-xl font-bold text-gray-800 md:hidden">Menu</h1>
-          <button 
+        <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Navigation</p>
+            <h1 className="text-lg font-bold text-slate-900">Menu</h1>
+          </div>
+          <button
+            type="button"
             onClick={() => setIsOpen(false)}
-            className="md:hidden text-gray-500 hover:text-gray-700 focus:outline-none p-2 -mr-2"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 lg:hidden"
             aria-label="Close sidebar menu"
           >
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        {/* Navigation Links */}
-        <nav className="flex-1 overflow-y-auto py-4">
-          <ul className="space-y-1 px-3">
+        <div className="border-b border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex items-center gap-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent/10 text-lg font-bold text-accent">A</div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-900">Admin Panel</p>
+              <p className="truncate text-xs text-slate-500">Management</p>
+            </div>
+          </div>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          <ul className="space-y-1.5">
             {navItems.map((item) => {
               const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
 
@@ -86,14 +95,21 @@ export default function Sidebar() {
                 <li key={item.name}>
                   <Link
                     href={item.href}
-                    className={`flex items-center px-3 py-2.5 rounded-lg transition-colors duration-200 text-sm font-medium ${
+                    onClick={() => setIsOpen(false)}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                       isActive
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        ? 'bg-accent text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
-                    <span className="mr-3 flex h-6 w-6 items-center justify-center rounded bg-gray-100 text-xs font-bold text-gray-600">{item.icon}</span>
-                    {item.name}
+                    <span
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {item.icon}
+                    </span>
+                    <span className="flex-1 text-left">{item.name}</span>
                   </Link>
                 </li>
               );
@@ -101,11 +117,13 @@ export default function Sidebar() {
           </ul>
         </nav>
 
-        {/* Bottom Profile/Logout Area */}
-        <div className="p-4 border-t border-gray-200 shrink-0">
+        <div className="border-t border-slate-200 p-4">
           <form action="/api/auth/logout" method="POST" onSubmit={handleLogout}>
-            <button type="submit" className="flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors duration-200 hover:bg-red-50">
-              <span className="mr-3 flex h-6 w-6 items-center justify-center rounded bg-red-50 text-xs font-bold">X</span>
+            <button
+              type="submit"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+            >
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-red-100 text-xs">↩</span>
               Logout
             </button>
           </form>
