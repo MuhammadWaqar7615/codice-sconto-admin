@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 const roles = [
-  { value: "administration", label: "Administration" },
+  { value: "administration", label: "Administrator" },
   { value: "editor", label: "Editor" },
-  { value: "subscribor", label: "Subscribor" },
+  { value: "subscribor", label: "Subscriber" },
 ];
 
 const emptyUser = { name: "", email: "", description: "", password: "", role: "subscribor", verified: false, status: "enabled" };
