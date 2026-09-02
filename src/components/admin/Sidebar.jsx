@@ -23,6 +23,8 @@ const navItems = [
   { name: 'Users', href: '/dashboard/users', icon: '◔' },
   { name: 'Translations', href: '/dashboard/translations', icon: '文' },
   { name: 'Theme', href: '/dashboard/theme', icon: '◈' },
+  { name: 'Email Templates', href: '/dashboard/email-templates', icon: '✉' },
+  { name: 'Settings', href: '/dashboard/settings', icon: '⚙' },
   { name: 'Public stores', href: '/negozi', icon: '⌂' },
   { name: 'Public offers', href: '/offerte', icon: '◌' },
 ];
