@@ -1,7 +1,6 @@
 import { requireRole } from "@/lib/auth/auth";
 import { ROLES } from "@/lib/auth/roles";
-import connectMongo from "@/lib/mongodb";
-import SeoPage from "@/models/SeoPage";
+import { prisma } from "@/lib/prisma";
 import SeoPageForm from "@/components/admin/seo/SeoPageForm";
 
 export const metadata = { title: "Edit Page SEO | CodiceSconto Admin" };
@@ -10,8 +9,9 @@ export default async function EditSeoPagePage({ params }) {
   await requireRole([ROLES.ADMIN, ROLES.ADMINISTRATION]);
   const { id } = await params;
 
-  await connectMongo();
-  const seoPage = await SeoPage.findById(id).lean();
+  const seoPage = await prisma.seoPage.findUnique({
+    where: { id },
+  });
 
   if (!seoPage) {
     return (
@@ -23,5 +23,5 @@ export default async function EditSeoPagePage({ params }) {
     );
   }
 
-  return <SeoPageForm seoPage={{ ...seoPage, _id: seoPage._id.toString() }} />;
+  return <SeoPageForm seoPage={{ ...seoPage, _id: seoPage.id }} />;
 }

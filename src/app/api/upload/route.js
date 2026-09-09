@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
-import cloudinary from "@/lib/cloudinary";
+import { supabase } from "@/lib/supabase";
 
 export async function POST(request) {
   try {
@@ -10,12 +10,14 @@ export async function POST(request) {
     if (!session || !session.user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
-    if (session.user.role !== ROLES.ADMIN) {
+    const userRole = (session.user.role || "").toLowerCase();
+    if (userRole !== ROLES.ADMIN && userRole !== ROLES.ADMINISTRATION) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
     const formData = await request.formData();
     const file = formData.get("file");
+    const requestedBucket = formData.get("bucket");
 
     if (!file) {
       return NextResponse.json({ message: "No file provided" }, { status: 400 });
@@ -35,25 +37,45 @@ export async function POST(request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Upload to Cloudinary using upload_stream
-    const uploadResult = await new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        { folder: "codicesconto_stores" },
-        (error, result) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve(result);
-          }
-        }
+    // Determine target bucket
+    const bucket = requestedBucket || "store-images";
+    const sanitizedName = file.name ? file.name.replace(/[^a-zA-Z0-9._-]/g, "_") : "image.png";
+    const storagePath = `uploads/${Date.now()}_${sanitizedName}`;
+
+    if (!supabase) {
+      return NextResponse.json(
+        { message: "Supabase storage is not configured" },
+        { status: 500 }
       );
-      uploadStream.end(buffer);
-    });
+    }
+
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(storagePath, buffer, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Supabase storage upload error:", uploadError);
+      return NextResponse.json(
+        { message: `Storage upload failed: ${uploadError.message}` },
+        { status: 500 }
+      );
+    }
+
+    // Retrieve public URL
+    const { data: urlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(storagePath);
 
     return NextResponse.json(
       {
-        url: uploadResult.secure_url,
-        public_id: uploadResult.public_id,
+        url: urlData.publicUrl,
+        public_id: storagePath,
+        storagePath: storagePath,
+        bucket: bucket,
       },
       { status: 200 }
     );

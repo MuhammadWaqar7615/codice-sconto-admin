@@ -51,6 +51,7 @@ export default function PromoBannerForm({ promoBanner }) {
         setUploadingImage(true);
         const imageFormData = new FormData();
         imageFormData.append("file", imageFile);
+        imageFormData.append("bucket", "coupon-banners");
 
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
@@ -67,6 +68,7 @@ export default function PromoBannerForm({ promoBanner }) {
 
         finalFormData.image = uploadData.url;
         finalFormData.imagePublicId = uploadData.public_id;
+        finalFormData.imageStoragePath = uploadData.storagePath;
       }
 
       const response = await fetch(isEditing ? `/api/promo-banners/${promoBanner._id}` : "/api/promo-banners", {

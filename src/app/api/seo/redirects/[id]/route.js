@@ -1,21 +1,17 @@
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
-import connectMongo from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
-import Redirect from "@/models/Redirect";
 
 async function requireAdmin() {
   const session = await getSession();
-
   if (!session?.user) {
     return { message: "Unauthorized", status: 401 };
   }
-
-  if (session.user.role !== ROLES.ADMIN && session.user.role !== ROLES.ADMINISTRATION) {
+  const role = (session.user.role || "").toLowerCase();
+  if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRATION) {
     return { message: "Forbidden", status: 403 };
   }
-
   return null;
 }
 
@@ -45,19 +41,15 @@ function isValidTarget(value) {
 export async function GET(_request, { params }) {
   try {
     const { id } = await params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ message: "Invalid redirect ID" }, { status: 400 });
-    }
-
-    await connectMongo();
-    const redirect = await Redirect.findById(id).lean();
+    const redirect = await prisma.redirect.findUnique({
+      where: { id },
+    });
 
     if (!redirect) {
       return NextResponse.json({ message: "Redirect not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ redirect: { ...redirect, _id: redirect._id.toString() } });
+    return NextResponse.json({ redirect: { ...redirect, _id: redirect.id } });
   } catch (error) {
     console.error("GET /api/seo/redirects/[id] Error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
@@ -72,11 +64,6 @@ export async function PUT(request, { params }) {
     }
 
     const { id } = await params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ message: "Invalid redirect ID" }, { status: 400 });
-    }
-
-    await connectMongo();
     const body = await request.json();
 
     const source = normalizeSource(body.source);
@@ -107,39 +94,33 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ message: "Status code must be one of 301, 302, 307, or 308." }, { status: 400 });
     }
 
-    const existing = await Redirect.findOne({ source, _id: { $ne: id } });
-    if (existing) {
+    const conflict = await prisma.redirect.findFirst({
+      where: {
+        source,
+        NOT: { id },
+      },
+    });
+    if (conflict) {
       return NextResponse.json({ message: "A redirect for this source path already exists." }, { status: 409 });
     }
 
-    const redirect = await Redirect.findByIdAndUpdate(
-      id,
-      {
+    const redirect = await prisma.redirect.update({
+      where: { id },
+      data: {
         source,
         target,
         statusCode,
-        isActive: body.isActive ?? true,
+        isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
         notes: String(body.notes || "").trim(),
       },
-      { new: true, runValidators: true }
-    );
-
-    if (!redirect) {
-      return NextResponse.json({ message: "Redirect not found" }, { status: 404 });
-    }
+    });
 
     return NextResponse.json({
       message: "Redirect updated successfully.",
-      redirect: { ...redirect.toObject(), _id: redirect._id.toString() },
+      redirect: { ...redirect, _id: redirect.id },
     });
   } catch (error) {
     console.error("PUT /api/seo/redirects/[id] Error:", error);
-    if (error.name === "ValidationError") {
-      return NextResponse.json({ message: Object.values(error.errors).map((item) => item.message).join(", ") }, { status: 400 });
-    }
-    if (error.code === 11000) {
-      return NextResponse.json({ message: "A redirect for this source path already exists." }, { status: 409 });
-    }
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -152,16 +133,17 @@ export async function DELETE(_request, { params }) {
     }
 
     const { id } = await params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ message: "Invalid redirect ID" }, { status: 400 });
-    }
+    const existing = await prisma.redirect.findUnique({
+      where: { id },
+    });
 
-    await connectMongo();
-    const redirect = await Redirect.findByIdAndDelete(id);
-
-    if (!redirect) {
+    if (!existing) {
       return NextResponse.json({ message: "Redirect not found" }, { status: 404 });
     }
+
+    await prisma.redirect.delete({
+      where: { id },
+    });
 
     return NextResponse.json({ message: "Redirect deleted successfully." });
   } catch (error) {

@@ -59,6 +59,7 @@ export default function CategoryForm({ category }) {
         setUploadingImage(true);
         const imageFormData = new FormData();
         imageFormData.append("file", imageFile);
+        imageFormData.append("bucket", "store-images");
 
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
@@ -75,6 +76,7 @@ export default function CategoryForm({ category }) {
 
         finalFormData.image = uploadData.url;
         finalFormData.imagePublicId = uploadData.public_id;
+        finalFormData.imageStoragePath = uploadData.storagePath;
       }
 
       const response = await fetch(isEditing ? `/api/categories/${category._id}` : "/api/categories", {

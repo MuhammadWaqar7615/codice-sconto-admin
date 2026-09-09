@@ -76,6 +76,7 @@ export default function SliderForm({ slider }) {
         isUploading = true;
         const imageFormData = new FormData();
         imageFormData.append("file", imageFile);
+        imageFormData.append("bucket", "coupon-banners");
 
         const uploadRes = await fetch("/api/upload", { method: "POST", body: imageFormData });
         if (!uploadRes.ok) throw new Error("Failed to upload slider image");
@@ -83,6 +84,7 @@ export default function SliderForm({ slider }) {
         const uploadData = await uploadRes.json();
         finalFormData.image = uploadData.url;
         finalFormData.imagePublicId = uploadData.public_id;
+        finalFormData.imageStoragePath = uploadData.storagePath;
       }
 
       // Upload logo if a new file is selected
@@ -91,6 +93,7 @@ export default function SliderForm({ slider }) {
         isUploading = true;
         const logoFormData = new FormData();
         logoFormData.append("file", logoFile);
+        logoFormData.append("bucket", "store-images");
 
         const uploadRes = await fetch("/api/upload", { method: "POST", body: logoFormData });
         if (!uploadRes.ok) throw new Error("Failed to upload logo image");
@@ -98,6 +101,7 @@ export default function SliderForm({ slider }) {
         const uploadData = await uploadRes.json();
         finalFormData.logo = uploadData.url;
         finalFormData.logoPublicId = uploadData.public_id;
+        finalFormData.logoStoragePath = uploadData.storagePath;
       }
 
       if (isUploading) setUploadingImage(false);

@@ -1,8 +1,7 @@
 import { requireAuth, requireRole } from "@/lib/auth/auth";
 import { ROLES } from "@/lib/auth/roles";
 import Link from "next/link";
-import connectMongo from "@/lib/mongodb";
-import Store from "@/models/Store";
+import { prisma } from "@/lib/prisma";
 import StoreTable from "./StoreTable";
 import DashboardSearch from "./DashboardSearch";
 
@@ -17,43 +16,45 @@ export default async function DashboardPage({ searchParams }) {
 
   // This will redirect to /dashboard (or show error) if wrong role
   await requireRole([ROLES.ADMIN, ROLES.ADMINISTRATION]);
-  await connectMongo();
 
   const sp = await Promise.resolve(searchParams);
   const search = sp?.search || "";
   const letter = sp?.letter || "";
 
-  let query = {};
+  let where = {};
 
   if (search) {
-    query.name = { $regex: search, $options: "i" };
+    where.name = { contains: search, mode: "insensitive" };
   }
 
   if (letter) {
     if (letter === "#") {
-      // Doesn't start with a letter
-      query.name = { ...query.name, $not: /^[a-zA-Z]/ };
+      where.AND = "abcdefghijklmnopqrstuvwxyz".split("").map((char) => ({
+        NOT: { name: { startsWith: char, mode: "insensitive" } },
+      }));
     } else {
-      // Starts with the specific letter
-      query.name = { ...query.name, $regex: `^${letter}`, $options: "i" };
+      where.name = { ...where.name, startsWith: letter, mode: "insensitive" };
     }
   }
 
-  const rawStores = await Store.find(query).sort({ name: 1 }).lean();
+  const rawStores = await prisma.store.findMany({
+    where,
+    orderBy: { name: "asc" },
+  });
 
   // Serialize stores for Client Component
-  const stores = rawStores.map(s => ({
-    _id: s._id.toString(),
+  const stores = rawStores.map((s) => ({
+    _id: s.id,
+    id: s.id,
     name: s.name,
     slug: s.slug,
     logoPath: s.logoPath,
-    isActive: s.isActive
+    isActive: s.isActive,
   }));
 
   return (
     <main className="min-h-screen bg-white">
       <div className="w-full">
-        
         <div className="px-4 md:px-8 py-6 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-accent-light">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
@@ -91,7 +92,6 @@ export default async function DashboardPage({ searchParams }) {
             <StoreTable stores={stores} />
           </div>
         </div>
-
       </div>
     </main>
   );

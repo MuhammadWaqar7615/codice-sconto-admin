@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/auth";
 import { ROLES } from "@/lib/auth/roles";
-import connectMongo from "@/lib/mongodb";
-import SeoPage from "@/models/SeoPage";
+import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "View Page SEO | CodiceSconto Admin" };
 
@@ -10,8 +9,9 @@ export default async function ViewSeoPagePage({ params }) {
   await requireRole([ROLES.ADMIN, ROLES.ADMINISTRATION]);
   const { id } = await params;
 
-  await connectMongo();
-  const seoPage = await SeoPage.findById(id).lean();
+  const seoPage = await prisma.seoPage.findUnique({
+    where: { id },
+  });
 
   if (!seoPage) {
     return (
@@ -23,7 +23,7 @@ export default async function ViewSeoPagePage({ params }) {
     );
   }
 
-  const page = { ...seoPage, _id: seoPage._id.toString() };
+  const page = { ...seoPage, _id: seoPage.id };
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-6 sm:px-6 lg:px-8">
@@ -62,18 +62,9 @@ export default async function ViewSeoPagePage({ params }) {
 
           <div className="mt-6">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Keywords</p>
-            <p className="mt-2 text-base text-slate-700">{Array.isArray(page.keywords) && page.keywords.length ? page.keywords.join(", ") : "—"}</p>
-          </div>
-
-          <div className="mt-6 grid gap-6 md:grid-cols-2">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Canonical URL</p>
-              <p className="mt-2 break-all text-base text-slate-700">{page.canonicalUrl || "—"}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Robots Index</p>
-              <p className="mt-2 text-base text-slate-700">{page.robots?.index ? "Yes" : "No"}</p>
-            </div>
+            <p className="mt-2 text-base text-slate-700">
+              {Array.isArray(page.keywords) && page.keywords.length ? page.keywords.join(", ") : "—"}
+            </p>
           </div>
         </section>
       </div>

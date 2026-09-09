@@ -111,10 +111,13 @@ export default function EditCouponModal({ isOpen, onClose, coupon }) {
 
     try {
       let imageUrl = formData.image;
+      let imageStoragePath = coupon.imageStoragePath || null;
+      let imagePublicId = coupon.imagePublicId || null;
       if (imageFile) {
         setUploadingImage(true);
         const imageFormData = new FormData();
         imageFormData.append("file", imageFile);
+        imageFormData.append("bucket", "coupon-banners");
 
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
@@ -128,6 +131,8 @@ export default function EditCouponModal({ isOpen, onClose, coupon }) {
 
         const uploadData = await uploadRes.json();
         imageUrl = uploadData.url;
+        imageStoragePath = uploadData.storagePath;
+        imagePublicId = uploadData.public_id;
         setUploadingImage(false);
       }
 
@@ -141,6 +146,8 @@ export default function EditCouponModal({ isOpen, onClose, coupon }) {
         isFeatured: formData.isFeatured,
         homepageSection: formData.homepageSection,
         image: imageUrl,
+        imageStoragePath,
+        imagePublicId,
         labelTop: formData.labelTop,
         labelBottom: formData.labelBottom,
       };
@@ -370,7 +377,7 @@ export default function EditCouponModal({ isOpen, onClose, coupon }) {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Coupon Image (Optional)</label>
                   <input type="file" accept="image/*" onChange={handleFileChange} className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-accent focus:border-accent file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-accent file:text-white hover:file:bg-accent-hover" />
-                  <p className="mt-1 text-xs text-gray-500">Upload an image for this coupon (will be stored in Cloudinary).</p>
+                  <p className="mt-1 text-xs text-gray-500">Upload an image for this coupon (will be stored in Supabase Storage).</p>
                   {imagePreview && (
                     <div className="mt-4">
                       <p className="text-sm text-gray-600 mb-2">Image Preview:</p>

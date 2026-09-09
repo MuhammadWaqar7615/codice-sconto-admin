@@ -1,21 +1,17 @@
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
-import connectMongo from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
-import SeoPage from "@/models/SeoPage";
 
 async function requireAdmin() {
   const session = await getSession();
-
   if (!session?.user) {
     return { message: "Unauthorized", status: 401 };
   }
-
-  if (session.user.role !== ROLES.ADMIN && session.user.role !== ROLES.ADMINISTRATION) {
+  const role = (session.user.role || "").toLowerCase();
+  if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRATION) {
     return { message: "Forbidden", status: 403 };
   }
-
   return null;
 }
 
@@ -33,7 +29,6 @@ function normalizeKeywords(value) {
 
 function isValidUrl(value) {
   if (!value) return true;
-
   try {
     new URL(value);
     return true;
@@ -45,18 +40,15 @@ function isValidUrl(value) {
 export async function GET(_request, { params }) {
   try {
     const { id } = await params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ message: "Invalid SEO page ID" }, { status: 400 });
-    }
-
-    await connectMongo();
-    const page = await SeoPage.findById(id).lean();
+    const page = await prisma.seoPage.findUnique({
+      where: { id },
+    });
 
     if (!page) {
       return NextResponse.json({ message: "SEO page not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ page: { ...page, _id: page._id.toString() } });
+    return NextResponse.json({ page: { ...page, _id: page.id } });
   } catch (error) {
     console.error("GET /api/seo/pages/[id] Error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
@@ -71,11 +63,6 @@ export async function PUT(request, { params }) {
     }
 
     const { id } = await params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ message: "Invalid SEO page ID" }, { status: 400 });
-    }
-
-    await connectMongo();
     const body = await request.json();
 
     if (!body.pageName?.trim()) {
@@ -86,7 +73,7 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ message: "Page path is required." }, { status: 400 });
     }
 
-    const normalizedPath = String(body.path).trim();
+    const normalizedPath = String(body.path).trim().toLowerCase();
     if (!normalizedPath.startsWith("/")) {
       return NextResponse.json({ message: "Page path must start with /." }, { status: 400 });
     }
@@ -99,18 +86,19 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ message: "Canonical URL is invalid." }, { status: 400 });
     }
 
-    const existing = await SeoPage.findOne({
-      path: normalizedPath.toLowerCase(),
-      _id: { $ne: id },
+    const conflict = await prisma.seoPage.findFirst({
+      where: {
+        path: normalizedPath,
+        NOT: { id },
+      },
     });
-
-    if (existing) {
+    if (conflict) {
       return NextResponse.json({ message: "A page SEO record for this path already exists." }, { status: 409 });
     }
 
     const payload = {
       pageName: body.pageName.trim(),
-      path: normalizedPath.toLowerCase(),
+      path: normalizedPath,
       title: String(body.title || "").trim(),
       description: String(body.description || "").trim(),
       keywords: normalizeKeywords(body.keywords),
@@ -138,24 +126,17 @@ export async function PUT(request, { params }) {
       isActive: Boolean(body.isActive ?? true),
     };
 
-    const page = await SeoPage.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
-
-    if (!page) {
-      return NextResponse.json({ message: "SEO page not found" }, { status: 404 });
-    }
+    const page = await prisma.seoPage.update({
+      where: { id },
+      data: payload,
+    });
 
     return NextResponse.json({
       message: "SEO page updated successfully.",
-      page: { ...page.toObject(), _id: page._id.toString() },
+      page: { ...page, _id: page.id },
     });
   } catch (error) {
     console.error("PUT /api/seo/pages/[id] Error:", error);
-    if (error.name === "ValidationError") {
-      return NextResponse.json({ message: Object.values(error.errors).map((item) => item.message).join(", ") }, { status: 400 });
-    }
-    if (error.code === 11000) {
-      return NextResponse.json({ message: "A page SEO record for this path already exists." }, { status: 409 });
-    }
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -168,16 +149,17 @@ export async function DELETE(_request, { params }) {
     }
 
     const { id } = await params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ message: "Invalid SEO page ID" }, { status: 400 });
-    }
 
-    await connectMongo();
-    const page = await SeoPage.findByIdAndDelete(id);
-
-    if (!page) {
+    const existing = await prisma.seoPage.findUnique({
+      where: { id },
+    });
+    if (!existing) {
       return NextResponse.json({ message: "SEO page not found" }, { status: 404 });
     }
+
+    await prisma.seoPage.delete({
+      where: { id },
+    });
 
     return NextResponse.json({ message: "SEO page deleted successfully." });
   } catch (error) {

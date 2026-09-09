@@ -1,22 +1,44 @@
 import { NextResponse } from "next/server";
-import connectMongo from "@/lib/mongodb";
-import Coupon from "@/models/Coupon";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await connectMongo();
     const now = new Date();
-    const features = await Coupon.find({
-      isActive: true,
-      isFeatured: true,
-      $or: [{ startsAt: { $exists: false } }, { startsAt: null }, { startsAt: { $lte: now } }],
-      $and: [{ $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: now } }] }],
-    })
-      .populate("storeId", "name slug logoPath")
-      .sort({ createdAt: -1 })
-      .lean();
+    const coupons = await prisma.coupon.findMany({
+      where: {
+        isActive: true,
+        isFeatured: true,
+        OR: [
+          { startsAt: null },
+          { startsAt: { lte: now } },
+        ],
+        AND: [
+          {
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gt: now } },
+            ],
+          },
+        ],
+      },
+      include: {
+        store: {
+          select: { id: true, name: true, slug: true, logoPath: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const features = coupons.map((c) => ({
+      ...c,
+      _id: c.id,
+      type: c.type ? c.type.toLowerCase() : "code",
+      homepageSection: c.homepageSection ? c.homepageSection.toLowerCase() : "featured",
+      storeId: c.store ? { ...c.store, _id: c.store.id } : c.storeId,
+      store: c.store ? { ...c.store, _id: c.store.id } : null,
+    }));
 
     return NextResponse.json({ features });
   } catch (error) {

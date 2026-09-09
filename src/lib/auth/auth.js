@@ -1,9 +1,20 @@
 import { getSession } from "./session";
 import { redirect } from "next/navigation";
 import { ROLES } from "./roles";
-import connectMongo from "@/lib/mongodb";
-import User from "@/models/User";
+import prisma from "@/lib/prisma";
 import { verifyPassword } from "./password";
+
+export function normalizeRole(role) {
+  if (!role) return "editor";
+  const roleMap = {
+    admin: "administration",
+    administration: "administration",
+    editor: "editor",
+    subscriber: "subscribor",
+    subscribor: "subscribor",
+  };
+  return roleMap[String(role).toLowerCase()] || "editor";
+}
 
 export async function authenticateUser(email, password) {
   const adminEmail = process.env.ADMIN_EMAIL;
@@ -18,17 +29,19 @@ export async function authenticateUser(email, password) {
     return {
       userId: "admin-id-001",
       email: adminEmail,
-      role: ROLES.ADMIN,
+      role: normalizeRole(ROLES.ADMIN),
     };
   }
 
-  await connectMongo();
-  const user = await User.findOne({ email: email.toLowerCase(), status: "enabled" }).lean();
-  if (user && await verifyPassword(password, user.passwordHash)) {
+  const user = await prisma.user.findUnique({
+    where: { email: email.toLowerCase() },
+  });
+
+  if (user && user.status === "ENABLED" && (await verifyPassword(password, user.passwordHash))) {
     return {
-      userId: user._id.toString(),
+      userId: user.id,
       email: user.email,
-      role: user.role,
+      role: normalizeRole(user.role),
       name: user.name,
     };
   }
@@ -49,10 +62,14 @@ export async function requireAuth() {
 export async function requireRole(allowedRoles) {
   const user = await requireAuth();
 
-  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
-  if (!roles.includes(user.role)) {
-    // If authenticated but wrong role, typically we redirect to their default home page
-    // For now we'll redirect to dashboard, or it could be a 403 page.
+  const normalizedAllowed = (Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles]).map((r) =>
+    normalizeRole(r)
+  );
+  const currentRole = normalizeRole(user.role);
+
+  const hasAccess = normalizedAllowed.includes(currentRole);
+
+  if (!hasAccess) {
     redirect("/dashboard");
   }
 

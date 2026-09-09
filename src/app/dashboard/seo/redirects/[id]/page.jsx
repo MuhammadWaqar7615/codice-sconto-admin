@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/auth";
 import { ROLES } from "@/lib/auth/roles";
-import connectMongo from "@/lib/mongodb";
-import Redirect from "@/models/Redirect";
+import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "View Redirect | CodiceSconto Admin" };
 
@@ -10,8 +9,9 @@ export default async function ViewRedirectPage({ params }) {
   await requireRole([ROLES.ADMIN, ROLES.ADMINISTRATION]);
   const { id } = await params;
 
-  await connectMongo();
-  const redirect = await Redirect.findById(id).lean();
+  const redirect = await prisma.redirect.findUnique({
+    where: { id },
+  });
 
   if (!redirect) {
     return (
@@ -23,7 +23,7 @@ export default async function ViewRedirectPage({ params }) {
     );
   }
 
-  const item = { ...redirect, _id: redirect._id.toString() };
+  const item = { ...redirect, _id: redirect.id };
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-6 sm:px-6 lg:px-8">
@@ -61,13 +61,13 @@ export default async function ViewRedirectPage({ params }) {
               <p className="mt-2 text-base text-slate-900">{item.statusCode}</p>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Active</p>
-              <p className="mt-2 text-base text-slate-900">{item.isActive ? "Yes" : "No"}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Status</p>
+              <p className="mt-2 text-base text-slate-900">{item.isActive ? "Active" : "Inactive"}</p>
             </div>
           </div>
 
           <div className="mt-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Notes</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Internal Notes</p>
             <p className="mt-2 text-base text-slate-700">{item.notes || "—"}</p>
           </div>
         </section>

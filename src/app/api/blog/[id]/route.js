@@ -1,30 +1,33 @@
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
-import BlogPost from "@/models/BlogPost";
-import connectMongo from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
-import cloudinary from "@/lib/cloudinary";
+import { deleteFromSupabase } from "@/lib/supabase";
 
 async function requireAdmin() {
   const session = await getSession();
   if (!session?.user) return { message: "Unauthorized", status: 401 };
-  if (![ROLES.ADMIN, ROLES.ADMINISTRATION].includes(session.user.role)) return { message: "Forbidden", status: 403 };
+  const role = (session.user.role || "").toLowerCase();
+  if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRATION) return { message: "Forbidden", status: 403 };
   return null;
 }
 
-function validId(id) {
-  return mongoose.Types.ObjectId.isValid(id);
+function serializePost(p) {
+  return {
+    ...p,
+    _id: p.id,
+    status: p.status ? p.status.toLowerCase() : "enabled",
+  };
 }
 
 export async function GET(request, { params }) {
   try {
     const { id } = await params;
-    if (!validId(id)) return NextResponse.json({ message: "Invalid blog post ID" }, { status: 400 });
-    await connectMongo();
-    const post = await BlogPost.findById(id).lean();
+    const post = await prisma.blogPost.findUnique({
+      where: { id },
+    });
     if (!post) return NextResponse.json({ message: "Blog post not found" }, { status: 404 });
-    return NextResponse.json({ post });
+    return NextResponse.json({ post: serializePost(post) });
   } catch (error) {
     console.error("GET /api/blog/[id] Error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
@@ -36,38 +39,39 @@ export async function PUT(request, { params }) {
     const authError = await requireAdmin();
     if (authError) return NextResponse.json({ message: authError.message }, { status: authError.status });
     const { id } = await params;
-    if (!validId(id)) return NextResponse.json({ message: "Invalid blog post ID" }, { status: 400 });
     const body = await request.json();
-    if (!body.title?.trim() || !body.description?.trim() || !body.image?.trim()) return NextResponse.json({ message: "Title, description, and image are required." }, { status: 400 });
-    await connectMongo();
-
-    const currentPost = await BlogPost.findById(id);
-    if (currentPost && currentPost.imagePublicId && body.imagePublicId && currentPost.imagePublicId !== body.imagePublicId) {
-      try {
-        await cloudinary.uploader.destroy(currentPost.imagePublicId);
-      } catch (err) {
-        console.error("Failed to delete old blog post image from Cloudinary:", err);
-      }
+    if (!body.title?.trim() || !body.description?.trim() || !body.image?.trim()) {
+      return NextResponse.json({ message: "Title, description, and image are required." }, { status: 400 });
     }
 
-    const post = await BlogPost.findByIdAndUpdate(
-      id,
-      {
+    const currentPost = await prisma.blogPost.findUnique({
+      where: { id },
+    });
+    if (!currentPost) return NextResponse.json({ message: "Blog post not found" }, { status: 404 });
+
+    const oldPath = currentPost.imageStoragePath || currentPost.imagePublicId;
+    const newPath = body.imageStoragePath || body.imagePublicId;
+    if (oldPath && newPath && oldPath !== newPath) {
+      await deleteFromSupabase("store-images", oldPath);
+    }
+
+    const post = await prisma.blogPost.update({
+      where: { id },
+      data: {
         title: body.title,
         description: body.description,
-        seoTitle: body.seoTitle,
-        seoDescription: body.seoDescription,
+        seoTitle: body.seoTitle || null,
+        seoDescription: body.seoDescription || null,
         image: body.image,
-        imagePublicId: body.imagePublicId,
-        status: body.status,
+        imagePublicId: body.imagePublicId || null,
+        imageStoragePath: newPath || null,
+        status: (body.status || "enabled").toUpperCase() === "DISABLED" ? "DISABLED" : "ENABLED",
       },
-      { new: true, runValidators: true }
-    ).lean();
-    if (!post) return NextResponse.json({ message: "Blog post not found" }, { status: 404 });
-    return NextResponse.json({ post });
+    });
+
+    return NextResponse.json({ post: serializePost(post) });
   } catch (error) {
     console.error("PUT /api/blog/[id] Error:", error);
-    if (error.name === "ValidationError") return NextResponse.json({ message: Object.values(error.errors).map((item) => item.message).join(", ") }, { status: 400 });
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -77,21 +81,21 @@ export async function DELETE(request, { params }) {
     const authError = await requireAdmin();
     if (authError) return NextResponse.json({ message: authError.message }, { status: authError.status });
     const { id } = await params;
-    if (!validId(id)) return NextResponse.json({ message: "Invalid blog post ID" }, { status: 400 });
-    await connectMongo();
 
-    const postToDelete = await BlogPost.findById(id);
+    const postToDelete = await prisma.blogPost.findUnique({
+      where: { id },
+    });
     if (!postToDelete) return NextResponse.json({ message: "Blog post not found" }, { status: 404 });
 
-    if (postToDelete.imagePublicId) {
-      try {
-        await cloudinary.uploader.destroy(postToDelete.imagePublicId);
-      } catch (err) {
-        console.error("Failed to delete blog post image from Cloudinary:", err);
-      }
+    const path = postToDelete.imageStoragePath || postToDelete.imagePublicId;
+    if (path) {
+      await deleteFromSupabase("store-images", path);
     }
 
-    const post = await BlogPost.findByIdAndDelete(id);
+    await prisma.blogPost.delete({
+      where: { id },
+    });
+
     return NextResponse.json({ message: "Blog post deleted successfully" });
   } catch (error) {
     console.error("DELETE /api/blog/[id] Error:", error);
