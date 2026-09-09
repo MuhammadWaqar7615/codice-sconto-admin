@@ -21,7 +21,7 @@ export default function EmailTemplateManager() {
         setTemplates(data.templates);
         setSelected(data.templates[0] || emptyTemplate);
       })
-      .catch((error) => setMessage({ type: "error", text: error.message }))
+      .catch((error) => setMessage({ type: " error", text: error.message }))
       .finally(() => setLoading(false));
   }, []);
 
