@@ -45,6 +45,7 @@ export default function BadgeForm({ badge }) {
         setUploadingImage(true);
         const imageFormData = new FormData();
         imageFormData.append("file", imageFile);
+        imageFormData.append("bucket", "store-images");
 
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
@@ -61,6 +62,7 @@ export default function BadgeForm({ badge }) {
 
         finalFormData.image = uploadData.url;
         finalFormData.imagePublicId = uploadData.public_id;
+        finalFormData.imageStoragePath = uploadData.storagePath;
       }
 
       const response = await fetch(isEditing ? `/api/badges/${badge._id}` : "/api/badges", { method: isEditing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(finalFormData) });

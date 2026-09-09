@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
-import connectMongo from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
-import Theme from "@/models/Theme";
 
 async function requireAdmin() {
   const session = await getSession();
   if (!session?.user) return { message: "Unauthorized", status: 401 };
-  if (![ROLES.ADMIN, ROLES.ADMINISTRATION].includes(session.user.role)) return { message: "Forbidden", status: 403 };
+  const role = (session.user.role || "").toLowerCase();
+  if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRATION) {
+    return { message: "Forbidden", status: 403 };
+  }
   return null;
 }
 
@@ -28,9 +30,16 @@ export async function GET() {
   try {
     const authError = await requireAdmin();
     if (authError) return NextResponse.json({ message: authError.message }, { status: authError.status });
-    await connectMongo();
-    const theme = await Theme.findOne().lean();
-    return NextResponse.json({ theme: { ...defaults, ...(theme || {}) } });
+
+    const theme = await prisma.theme.findFirst();
+
+    return NextResponse.json({
+      theme: {
+        ...defaults,
+        ...(theme || {}),
+        _id: theme?.id,
+      },
+    });
   } catch (error) {
     console.error("GET /api/theme Error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
@@ -41,6 +50,7 @@ export async function PUT(request) {
   try {
     const authError = await requireAdmin();
     if (authError) return NextResponse.json({ message: authError.message }, { status: authError.status });
+
     const body = await request.json();
     const payload = {
       primaryColor: String(body.primaryColor || defaults.primaryColor).trim(),
@@ -54,16 +64,30 @@ export async function PUT(request) {
       favicon: String(body.favicon || "").trim(),
       homeBackgroundImage: String(body.homeBackgroundImage || "").trim(),
     };
+
     if (!/^#[0-9A-Fa-f]{6}$/.test(payload.primaryColor) || !/^#[0-9A-Fa-f]{6}$/.test(payload.secondaryColor)) {
       return NextResponse.json({ message: "Colors must use six-digit hexadecimal values." }, { status: 400 });
     }
-    await connectMongo();
-    const existing = await Theme.findOne();
-    const theme = existing ? await Theme.findByIdAndUpdate(existing._id, payload, { new: true, runValidators: true }).lean() : await Theme.create(payload);
-    return NextResponse.json({ message: "Theme settings saved successfully.", theme: { ...theme, _id: theme._id.toString() } });
+
+    const existing = await prisma.theme.findFirst();
+    let theme;
+    if (existing) {
+      theme = await prisma.theme.update({
+        where: { id: existing.id },
+        data: payload,
+      });
+    } else {
+      theme = await prisma.theme.create({
+        data: payload,
+      });
+    }
+
+    return NextResponse.json({
+      message: "Theme settings saved successfully.",
+      theme: { ...theme, _id: theme.id },
+    });
   } catch (error) {
     console.error("PUT /api/theme Error:", error);
-    if (error.name === "ValidationError") return NextResponse.json({ message: Object.values(error.errors).map((item) => item.message).join(", ") }, { status: 400 });
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }

@@ -1,18 +1,19 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/auth";
 import { ROLES } from "@/lib/auth/roles";
-import connectMongo from "@/lib/mongodb";
-import Redirect from "@/models/Redirect";
+import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Redirects | CodiceSconto Admin" };
 
 export default async function RedirectsPage() {
   await requireRole([ROLES.ADMIN, ROLES.ADMINISTRATION]);
-  await connectMongo();
 
-  const redirects = (await Redirect.find().sort({ source: 1 }).lean()).map((redirect) => ({
+  const rawRedirects = await prisma.redirect.findMany({
+    orderBy: { source: "asc" },
+  });
+  const redirects = rawRedirects.map((redirect) => ({
     ...redirect,
-    _id: redirect._id.toString(),
+    _id: redirect.id,
   }));
 
   return (
@@ -58,11 +59,11 @@ export default async function RedirectsPage() {
                       </td>
                       <td className="px-4 py-4 text-sm">
                         <div className="flex flex-wrap items-center gap-3">
-                          <Link href={`/dashboard/seo/redirects/${redirect._id}/edit`} className="font-medium text-indigo-600 transition hover:text-indigo-800">
-                            Edit
-                          </Link>
-                          <Link href={`/dashboard/seo/redirects/${redirect._id}`} className="font-medium text-slate-600 transition hover:text-slate-800">
+                          <Link href={`/dashboard/seo/redirects/${redirect._id}`} className="font-medium text-slate-700 hover:text-slate-900">
                             View
+                          </Link>
+                          <Link href={`/dashboard/seo/redirects/${redirect._id}/edit`} className="font-medium text-accent hover:text-accent-hover">
+                            Edit
                           </Link>
                         </div>
                       </td>

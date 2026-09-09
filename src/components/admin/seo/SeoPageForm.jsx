@@ -56,12 +56,12 @@ export default function SeoPageForm({ seoPage }) {
     },
   } : { ...emptyPage, schema: "{}" });
   const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(false);
+  const [loadedSeoPageId, setLoadedSeoPageId] = useState(null);
   const [error, setError] = useState("");
+  const fetching = isEditing && loadedSeoPageId !== seoPage._id;
 
   useEffect(() => {
     if (!seoPage?._id) return;
-    setFetching(true);
     fetch(`/api/seo/pages/${seoPage._id}`)
       .then(async (response) => {
         const data = await response.json();
@@ -77,7 +77,7 @@ export default function SeoPageForm({ seoPage }) {
         });
       })
       .catch((loadError) => setError(loadError.message))
-      .finally(() => setFetching(false));
+        .finally(() => setLoadedSeoPageId(seoPage._id));
   }, [seoPage?._id]);
 
   const titleCharCount = formData.title.length;

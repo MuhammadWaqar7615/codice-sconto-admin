@@ -45,6 +45,7 @@ export default function BlogPostForm({ post }) {
         setUploadingImage(true);
         const imageFormData = new FormData();
         imageFormData.append("file", imageFile);
+        imageFormData.append("bucket", "store-images");
 
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
@@ -61,6 +62,7 @@ export default function BlogPostForm({ post }) {
 
         finalFormData.image = uploadData.url;
         finalFormData.imagePublicId = uploadData.public_id;
+        finalFormData.imageStoragePath = uploadData.storagePath;
       }
 
       const response = await fetch(isEditing ? `/api/blog/${post._id}` : "/api/blog", { method: isEditing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(finalFormData) });

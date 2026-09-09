@@ -1,20 +1,17 @@
 import { NextResponse } from "next/server";
-import connectMongo from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
-import Redirect from "@/models/Redirect";
 
 async function requireAdmin() {
   const session = await getSession();
-
   if (!session?.user) {
     return { message: "Unauthorized", status: 401 };
   }
-
-  if (session.user.role !== ROLES.ADMIN && session.user.role !== ROLES.ADMINISTRATION) {
+  const role = (session.user.role || "").toLowerCase();
+  if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRATION) {
     return { message: "Forbidden", status: 403 };
   }
-
   return null;
 }
 
@@ -26,9 +23,7 @@ function normalizeSource(source) {
 }
 
 function normalizeTarget(target) {
-  const value = String(target || "").trim();
-  if (!value) return "";
-  return value;
+  return String(target || "").trim();
 }
 
 function isValidTarget(value) {
@@ -45,13 +40,14 @@ function isValidTarget(value) {
 
 export async function GET() {
   try {
-    await connectMongo();
-    const redirects = await Redirect.find().sort({ source: 1 }).lean();
+    const redirects = await prisma.redirect.findMany({
+      orderBy: { source: "asc" },
+    });
 
     return NextResponse.json({
       redirects: redirects.map((redirect) => ({
         ...redirect,
-        _id: redirect._id.toString(),
+        _id: redirect.id,
       })),
     });
   } catch (error) {
@@ -67,7 +63,6 @@ export async function POST(request) {
       return NextResponse.json({ message: authError.message }, { status: authError.status });
     }
 
-    await connectMongo();
     const body = await request.json();
 
     const source = normalizeSource(body.source);
@@ -98,26 +93,29 @@ export async function POST(request) {
       return NextResponse.json({ message: "Status code must be one of 301, 302, 307, or 308." }, { status: 400 });
     }
 
-    const redirect = await Redirect.create({
-      source,
-      target,
-      statusCode,
-      isActive: body.isActive ?? true,
-      notes: String(body.notes || "").trim(),
+    const existing = await prisma.redirect.findUnique({
+      where: { source },
+    });
+    if (existing) {
+      return NextResponse.json({ message: "A redirect for this source path already exists." }, { status: 409 });
+    }
+
+    const redirect = await prisma.redirect.create({
+      data: {
+        source,
+        target,
+        statusCode,
+        isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
+        notes: String(body.notes || "").trim(),
+      },
     });
 
     return NextResponse.json({
       message: "Redirect created successfully.",
-      redirect: { ...redirect.toObject(), _id: redirect._id.toString() },
+      redirect: { ...redirect, _id: redirect.id },
     }, { status: 201 });
   } catch (error) {
     console.error("POST /api/seo/redirects Error:", error);
-    if (error.name === "ValidationError") {
-      return NextResponse.json({ message: Object.values(error.errors).map((item) => item.message).join(", ") }, { status: 400 });
-    }
-    if (error.code === 11000) {
-      return NextResponse.json({ message: "A redirect for this source path already exists." }, { status: 409 });
-    }
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }

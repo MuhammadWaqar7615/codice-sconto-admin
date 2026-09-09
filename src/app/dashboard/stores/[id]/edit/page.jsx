@@ -118,6 +118,7 @@ export default function EditStorePage({ params }) {
         setUploadingImage(true);
         const imageFormData = new FormData();
         imageFormData.append("file", logoFile);
+        imageFormData.append("bucket", "store-images");
 
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
@@ -134,6 +135,7 @@ export default function EditStorePage({ params }) {
 
         storeData.logoPath = uploadData.url;
         storeData.logoPublicId = uploadData.public_id;
+        storeData.logoStoragePath = uploadData.storagePath;
       }
 
       // 2. Submit store data

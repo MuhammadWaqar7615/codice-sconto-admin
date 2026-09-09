@@ -1,7 +1,6 @@
 import { requireRole } from "@/lib/auth/auth";
 import { ROLES } from "@/lib/auth/roles";
-import connectMongo from "@/lib/mongodb";
-import Redirect from "@/models/Redirect";
+import { prisma } from "@/lib/prisma";
 import RedirectForm from "@/components/admin/seo/RedirectForm";
 
 export const metadata = { title: "Edit Redirect | CodiceSconto Admin" };
@@ -10,8 +9,9 @@ export default async function EditRedirectPage({ params }) {
   await requireRole([ROLES.ADMIN, ROLES.ADMINISTRATION]);
   const { id } = await params;
 
-  await connectMongo();
-  const redirect = await Redirect.findById(id).lean();
+  const redirect = await prisma.redirect.findUnique({
+    where: { id },
+  });
 
   if (!redirect) {
     return (
@@ -23,5 +23,5 @@ export default async function EditRedirectPage({ params }) {
     );
   }
 
-  return <RedirectForm redirect={{ ...redirect, _id: redirect._id.toString() }} />;
+  return <RedirectForm redirect={{ ...redirect, _id: redirect.id }} />;
 }

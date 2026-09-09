@@ -1,35 +1,37 @@
 import { NextResponse } from "next/server";
-import connectMongo from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
-import RobotsConfig from "@/models/RobotsConfig";
 
 async function requireAdmin() {
   const session = await getSession();
-
   if (!session?.user) {
     return { message: "Unauthorized", status: 401 };
   }
-
-  if (session.user.role !== ROLES.ADMIN && session.user.role !== ROLES.ADMINISTRATION) {
+  const role = (session.user.role || "").toLowerCase();
+  if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRATION) {
     return { message: "Forbidden", status: 403 };
   }
-
   return null;
 }
 
+const defaults = {
+  allowCrawlers: true,
+  sitemapUrl: "https://www.codicesconto.com/sitemap.xml",
+  disallowPaths: ["/api/", "/dashboard/", "/account/"],
+  additionalRules: "",
+  isActive: true,
+};
+
 export async function GET() {
   try {
-    await connectMongo();
-    const config = (await RobotsConfig.findOne().lean()) || {
-      allowCrawlers: true,
-      sitemapUrl: "https://www.codicesconto.com/sitemap.xml",
-      disallowPaths: ["/api/", "/dashboard/", "/account/"],
-      additionalRules: "",
-      isActive: true,
-    };
+    const config = await prisma.robotsConfig.findFirst();
 
-    return NextResponse.json({ config });
+    return NextResponse.json({
+      config: config
+        ? { ...config, _id: config.id }
+        : defaults,
+    });
   } catch (error) {
     console.error("GET /api/seo/robots Error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
@@ -43,7 +45,6 @@ export async function POST(request) {
       return NextResponse.json({ message: authError.message }, { status: authError.status });
     }
 
-    await connectMongo();
     const body = await request.json();
 
     const payload = {
@@ -51,39 +52,38 @@ export async function POST(request) {
       sitemapUrl: String(body.sitemapUrl || "https://www.codicesconto.com/sitemap.xml").trim(),
       disallowPaths: Array.isArray(body.disallowPaths)
         ? body.disallowPaths.map((path) => String(path).trim()).filter(Boolean)
-        : ["/api/", "/dashboard/", "/account/"],
+        : defaults.disallowPaths,
       additionalRules: String(body.additionalRules || "").trim(),
       isActive: Boolean(body.isActive ?? true),
     };
 
-    const existing = await RobotsConfig.findOne();
-    const config = existing
-      ? await RobotsConfig.findByIdAndUpdate(existing._id, payload, { new: true, runValidators: true })
-      : await RobotsConfig.create(payload);
+    const existing = await prisma.robotsConfig.findFirst();
+    let config;
+    if (existing) {
+      config = await prisma.robotsConfig.update({
+        where: { id: existing.id },
+        data: payload,
+      });
+    } else {
+      config = await prisma.robotsConfig.create({
+        data: payload,
+      });
+    }
 
     return NextResponse.json({
       message: "Robots configuration saved successfully.",
-      config: { ...config.toObject(), _id: config._id.toString() },
+      config: { ...config, _id: config.id },
     });
   } catch (error) {
     console.error("POST /api/seo/robots Error:", error);
-    if (error.name === "ValidationError") {
-      return NextResponse.json({ message: Object.values(error.errors).map((item) => item.message).join(", ") }, { status: 400 });
-    }
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }
 
 export async function GET_ROBOTS() {
   try {
-    await connectMongo();
-    const config = (await RobotsConfig.findOne().lean()) || {
-      allowCrawlers: true,
-      sitemapUrl: "https://www.codicesconto.com/sitemap.xml",
-      disallowPaths: ["/api/", "/dashboard/", "/account/"],
-      additionalRules: "",
-      isActive: true,
-    };
+    const dbConfig = await prisma.robotsConfig.findFirst();
+    const config = dbConfig || defaults;
 
     if (!config.isActive) {
       return new NextResponse("User-agent: *\nDisallow: /\n", {

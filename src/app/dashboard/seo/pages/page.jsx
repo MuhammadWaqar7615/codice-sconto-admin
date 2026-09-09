@@ -1,18 +1,19 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/auth";
 import { ROLES } from "@/lib/auth/roles";
-import connectMongo from "@/lib/mongodb";
-import SeoPage from "@/models/SeoPage";
+import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Page SEO | CodiceSconto Admin" };
 
 export default async function SeoPagesPage() {
   await requireRole([ROLES.ADMIN, ROLES.ADMINISTRATION]);
-  await connectMongo();
 
-  const pages = (await SeoPage.find().sort({ pageName: 1 }).lean()).map((page) => ({
+  const rawPages = await prisma.seoPage.findMany({
+    orderBy: { pageName: "asc" },
+  });
+  const pages = rawPages.map((page) => ({
     ...page,
-    _id: page._id.toString(),
+    _id: page.id,
   }));
 
   return (
@@ -62,11 +63,11 @@ export default async function SeoPagesPage() {
                       </td>
                       <td className="px-4 py-4 text-sm">
                         <div className="flex flex-wrap items-center gap-3">
-                          <Link href={`/dashboard/seo/pages/${page._id}/edit`} className="font-medium text-indigo-600 transition hover:text-indigo-800">
-                            Edit
-                          </Link>
-                          <Link href={`/dashboard/seo/pages/${page._id}`} className="font-medium text-slate-600 transition hover:text-slate-800">
+                          <Link href={`/dashboard/seo/pages/${page._id}`} className="font-medium text-slate-700 hover:text-slate-900">
                             View
+                          </Link>
+                          <Link href={`/dashboard/seo/pages/${page._id}/edit`} className="font-medium text-accent hover:text-accent-hover">
+                            Edit
                           </Link>
                         </div>
                       </td>

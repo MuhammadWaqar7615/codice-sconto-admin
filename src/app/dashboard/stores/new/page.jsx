@@ -81,6 +81,7 @@ export default function NewStorePage() {
       setUploadingImage(true);
       const imageFormData = new FormData();
       imageFormData.append("file", logoFile);
+      imageFormData.append("bucket", "store-images");
 
       const uploadRes = await fetch("/api/upload", {
         method: "POST",
@@ -95,11 +96,12 @@ export default function NewStorePage() {
       const uploadData = await uploadRes.json();
       setUploadingImage(false);
 
-      // 2. Submit store data with Cloudinary details
+      // 2. Submit store data with Supabase Storage details
       const storeData = {
         ...formData,
         logoPath: uploadData.url,
         logoPublicId: uploadData.public_id,
+        logoStoragePath: uploadData.storagePath,
       };
 
       const res = await fetch("/api/stores", {

@@ -1,25 +1,17 @@
 import { NextResponse } from "next/server";
-import connectMongo from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
-import SitemapConfig from "@/models/SitemapConfig";
-import Store from "@/models/Store";
-import Category from "@/models/Category";
-import Subcategory from "@/models/Subcategory";
-import BlogPost from "@/models/BlogPost";
-import SeoPage from "@/models/SeoPage";
 
 async function requireAdmin() {
   const session = await getSession();
-
   if (!session?.user) {
     return { message: "Unauthorized", status: 401 };
   }
-
-  if (session.user.role !== ROLES.ADMIN && session.user.role !== ROLES.ADMINISTRATION) {
+  const role = (session.user.role || "").toLowerCase();
+  if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRATION) {
     return { message: "Forbidden", status: 403 };
   }
-
   return null;
 }
 
@@ -27,19 +19,21 @@ function buildUrlEntry(url, lastmod) {
   return `  <url>\n    <loc>${url}</loc>\n    ${lastmod ? `    <lastmod>${lastmod}</lastmod>\n` : ""}  </url>`;
 }
 
+const defaults = {
+  siteUrl: "https://www.codicesconto.com",
+  includeHome: true,
+  includeStores: true,
+  includeCategories: true,
+  includeSubcategories: true,
+  includeBlog: true,
+  includeSeoPages: true,
+  isActive: true,
+};
+
 export async function GET() {
   try {
-    await connectMongo();
-    const config = (await SitemapConfig.findOne().lean()) || {
-      siteUrl: "https://www.codicesconto.com",
-      includeHome: true,
-      includeStores: true,
-      includeCategories: true,
-      includeSubcategories: true,
-      includeBlog: true,
-      includeSeoPages: true,
-      isActive: true,
-    };
+    const dbConfig = await prisma.sitemapConfig.findFirst();
+    const config = dbConfig || defaults;
 
     if (!config.isActive) {
       return NextResponse.json({ message: "Sitemap generation is disabled." }, { status: 403 });
@@ -48,25 +42,45 @@ export async function GET() {
     const baseUrl = config.siteUrl.replace(/\/$/, "");
     const entries = [];
 
-    if (config.includeHome) entries.push(buildUrlEntry(`${baseUrl}/`, new Date().toISOString()));
+    if (config.includeHome) {
+      entries.push(buildUrlEntry(`${baseUrl}/`, new Date().toISOString()));
+    }
 
     if (config.includeStores) {
-      const stores = await Store.find({ isActive: true }).select("slug updatedAt").lean();
-      stores.forEach((store) => entries.push(buildUrlEntry(`${baseUrl}/negozi/${store.slug}`, store.updatedAt ? new Date(store.updatedAt).toISOString() : undefined)));
+      const stores = await prisma.store.findMany({
+        where: { isActive: true },
+        select: { slug: true, updatedAt: true },
+      });
+      stores.forEach((store) =>
+        entries.push(buildUrlEntry(`${baseUrl}/negozi/${store.slug}`, store.updatedAt ? new Date(store.updatedAt).toISOString() : undefined))
+      );
     }
 
     if (config.includeCategories) {
-      const categories = await Category.find({ status: "enabled" }).select("slug updatedAt").lean();
-      categories.forEach((category) => entries.push(buildUrlEntry(`${baseUrl}/categorie/${category.slug}`, category.updatedAt ? new Date(category.updatedAt).toISOString() : undefined)));
+      const categories = await prisma.category.findMany({
+        where: { status: "ENABLED" },
+        select: { slug: true, updatedAt: true },
+      });
+      categories.forEach((category) =>
+        entries.push(buildUrlEntry(`${baseUrl}/categorie/${category.slug}`, category.updatedAt ? new Date(category.updatedAt).toISOString() : undefined))
+      );
     }
 
     if (config.includeSubcategories) {
-      const subcategories = await Subcategory.find({ status: "enabled" }).select("slug updatedAt").lean();
-      subcategories.forEach((subcategory) => entries.push(buildUrlEntry(`${baseUrl}/categorie/${subcategory.slug}`, subcategory.updatedAt ? new Date(subcategory.updatedAt).toISOString() : undefined)));
+      const subcategories = await prisma.subcategory.findMany({
+        where: { status: "ENABLED" },
+        select: { slug: true, updatedAt: true },
+      });
+      subcategories.forEach((subcategory) =>
+        entries.push(buildUrlEntry(`${baseUrl}/categorie/${subcategory.slug}`, subcategory.updatedAt ? new Date(subcategory.updatedAt).toISOString() : undefined))
+      );
     }
 
     if (config.includeBlog) {
-      const posts = await BlogPost.find({ status: "enabled" }).select("title updatedAt").lean();
+      const posts = await prisma.blogPost.findMany({
+        where: { status: "ENABLED" },
+        select: { title: true, updatedAt: true },
+      });
       posts.forEach((post) => {
         const slug = String(post.title || "")
           .trim()
@@ -78,8 +92,13 @@ export async function GET() {
     }
 
     if (config.includeSeoPages) {
-      const seoPages = await SeoPage.find({ isActive: true }).select("path updatedAt").lean();
-      seoPages.forEach((page) => entries.push(buildUrlEntry(`${baseUrl}${page.path}`, page.updatedAt ? new Date(page.updatedAt).toISOString() : undefined)));
+      const seoPages = await prisma.seoPage.findMany({
+        where: { isActive: true },
+        select: { path: true, updatedAt: true },
+      });
+      seoPages.forEach((page) =>
+        entries.push(buildUrlEntry(`${baseUrl}${page.path}`, page.updatedAt ? new Date(page.updatedAt).toISOString() : undefined))
+      );
     }
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.join("\n")}\n</urlset>`;
@@ -103,10 +122,9 @@ export async function POST(request) {
       return NextResponse.json({ message: authError.message }, { status: authError.status });
     }
 
-    await connectMongo();
     const body = await request.json();
     const payload = {
-      siteUrl: String(body.siteUrl || "https://www.codicesconto.com").trim(),
+      siteUrl: String(body.siteUrl || defaults.siteUrl).trim(),
       includeHome: Boolean(body.includeHome ?? true),
       includeStores: Boolean(body.includeStores ?? true),
       includeCategories: Boolean(body.includeCategories ?? true),
@@ -116,20 +134,25 @@ export async function POST(request) {
       isActive: Boolean(body.isActive ?? true),
     };
 
-    const existing = await SitemapConfig.findOne();
-    const config = existing
-      ? await SitemapConfig.findByIdAndUpdate(existing._id, payload, { new: true, runValidators: true })
-      : await SitemapConfig.create(payload);
+    const existing = await prisma.sitemapConfig.findFirst();
+    let config;
+    if (existing) {
+      config = await prisma.sitemapConfig.update({
+        where: { id: existing.id },
+        data: payload,
+      });
+    } else {
+      config = await prisma.sitemapConfig.create({
+        data: payload,
+      });
+    }
 
     return NextResponse.json({
       message: "Sitemap configuration saved successfully.",
-      config: { ...config.toObject(), _id: config._id.toString() },
+      config: { ...config, _id: config.id },
     });
   } catch (error) {
     console.error("POST /api/seo/sitemap Error:", error);
-    if (error.name === "ValidationError") {
-      return NextResponse.json({ message: Object.values(error.errors).map((item) => item.message).join(", ") }, { status: 400 });
-    }
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }

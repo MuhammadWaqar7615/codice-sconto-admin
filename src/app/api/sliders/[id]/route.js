@@ -1,32 +1,33 @@
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
-import Slider from "@/models/Slider";
-import connectMongo from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
-import cloudinary from "@/lib/cloudinary";
+import { deleteFromSupabase } from "@/lib/supabase";
 
 async function requireAdmin() {
   const session = await getSession();
   if (!session?.user) return { message: "Unauthorized", status: 401 };
-  if (![ROLES.ADMIN, ROLES.ADMINISTRATION].includes(session.user.role)) return { message: "Forbidden", status: 403 };
+  const role = (session.user.role || "").toLowerCase();
+  if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRATION) return { message: "Forbidden", status: 403 };
   return null;
 }
 
-function validId(id) {
-  return mongoose.Types.ObjectId.isValid(id);
+function serializeSlider(s) {
+  return {
+    ...s,
+    _id: s.id,
+    status: s.status ? s.status.toLowerCase() : "enabled",
+  };
 }
-
-const fields = (body) => ({ title: body.title, description: body.description, discount: body.discount, logo: body.logo, logoPublicId: body.logoPublicId, link: body.link, featured: body.featured, seoTitle: body.seoTitle, seoDescription: body.seoDescription, status: body.status, image: body.image, imagePublicId: body.imagePublicId });
 
 export async function GET(request, { params }) {
   try {
     const { id } = await params;
-    if (!validId(id)) return NextResponse.json({ message: "Invalid slider ID" }, { status: 400 });
-    await connectMongo();
-    const slider = await Slider.findById(id).lean();
+    const slider = await prisma.slider.findUnique({
+      where: { id },
+    });
     if (!slider) return NextResponse.json({ message: "Slider not found" }, { status: 404 });
-    return NextResponse.json({ slider });
+    return NextResponse.json({ slider: serializeSlider(slider) });
   } catch (error) {
     console.error("GET /api/sliders/[id] Error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
@@ -38,36 +39,57 @@ export async function PUT(request, { params }) {
     const authError = await requireAdmin();
     if (authError) return NextResponse.json({ message: authError.message }, { status: authError.status });
     const { id } = await params;
-    if (!validId(id)) return NextResponse.json({ message: "Invalid slider ID" }, { status: 400 });
     const body = await request.json();
     if (!body.title?.trim()) return NextResponse.json({ message: "Title is required." }, { status: 400 });
-    await connectMongo();
 
-    // Check if images changed and delete old images from Cloudinary
-    const currentSlider = await Slider.findById(id);
-    if (currentSlider) {
-      if (currentSlider.imagePublicId && body.imagePublicId && currentSlider.imagePublicId !== body.imagePublicId) {
-        try {
-          await cloudinary.uploader.destroy(currentSlider.imagePublicId);
-        } catch (err) {
-          console.error("Failed to delete old slider image from Cloudinary:", err);
-        }
-      }
-      if (currentSlider.logoPublicId && body.logoPublicId && currentSlider.logoPublicId !== body.logoPublicId) {
-        try {
-          await cloudinary.uploader.destroy(currentSlider.logoPublicId);
-        } catch (err) {
-          console.error("Failed to delete old slider logo from Cloudinary:", err);
-        }
-      }
+    const currentSlider = await prisma.slider.findUnique({
+      where: { id },
+    });
+    if (!currentSlider) return NextResponse.json({ message: "Slider not found" }, { status: 404 });
+
+    // Clean up old image / logo if changed
+    const oldImagePath = currentSlider.imageStoragePath || currentSlider.imagePublicId;
+    const newImagePath = body.imageStoragePath || body.imagePublicId;
+    if (oldImagePath && newImagePath && oldImagePath !== newImagePath) {
+      await deleteFromSupabase("coupon-banners", oldImagePath);
     }
 
-    const slider = await Slider.findByIdAndUpdate(id, fields(body), { new: true, runValidators: true }).lean();
-    if (!slider) return NextResponse.json({ message: "Slider not found" }, { status: 404 });
-    return NextResponse.json({ slider });
+    const oldLogoPath = currentSlider.logoStoragePath || currentSlider.logoPublicId;
+    const newLogoPath = body.logoStoragePath || body.logoPublicId;
+    if (oldLogoPath && newLogoPath && oldLogoPath !== newLogoPath) {
+      await deleteFromSupabase("store-images", oldLogoPath);
+    }
+
+    const updateData = {};
+    if (body.title !== undefined) updateData.title = body.title;
+    if (body.description !== undefined) updateData.description = body.description || null;
+    if (body.discount !== undefined) updateData.discount = body.discount || null;
+    if (body.logo !== undefined) updateData.logo = body.logo;
+    if (newLogoPath !== undefined) {
+      updateData.logoPublicId = body.logoPublicId || null;
+      updateData.logoStoragePath = newLogoPath || null;
+    }
+    if (body.link !== undefined) updateData.link = body.link || "#";
+    if (body.featured !== undefined) updateData.featured = Boolean(body.featured);
+    if (body.seoTitle !== undefined) updateData.seoTitle = body.seoTitle || null;
+    if (body.seoDescription !== undefined) updateData.seoDescription = body.seoDescription || null;
+    if (body.status !== undefined) {
+      updateData.status = (body.status || "enabled").toUpperCase() === "DISABLED" ? "DISABLED" : "ENABLED";
+    }
+    if (body.image !== undefined) updateData.image = body.image;
+    if (newImagePath !== undefined) {
+      updateData.imagePublicId = body.imagePublicId || null;
+      updateData.imageStoragePath = newImagePath || null;
+    }
+
+    const slider = await prisma.slider.update({
+      where: { id },
+      data: updateData,
+    });
+
+    return NextResponse.json({ slider: serializeSlider(slider) });
   } catch (error) {
     console.error("PUT /api/sliders/[id] Error:", error);
-    if (error.name === "ValidationError") return NextResponse.json({ message: Object.values(error.errors).map((item) => item.message).join(", ") }, { status: 400 });
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -77,29 +99,25 @@ export async function DELETE(request, { params }) {
     const authError = await requireAdmin();
     if (authError) return NextResponse.json({ message: authError.message }, { status: authError.status });
     const { id } = await params;
-    if (!validId(id)) return NextResponse.json({ message: "Invalid slider ID" }, { status: 400 });
-    await connectMongo();
 
-    const sliderToDelete = await Slider.findById(id);
-    if (!sliderToDelete) return NextResponse.json({ message: "Slider not found" }, { status: 404 });
+    const slider = await prisma.slider.findUnique({
+      where: { id },
+    });
+    if (!slider) return NextResponse.json({ message: "Slider not found" }, { status: 404 });
 
-    // Delete images from Cloudinary if they exist
-    if (sliderToDelete.imagePublicId) {
-      try {
-        await cloudinary.uploader.destroy(sliderToDelete.imagePublicId);
-      } catch (err) {
-        console.error("Failed to delete slider image from Cloudinary:", err);
-      }
+    const imagePath = slider.imageStoragePath || slider.imagePublicId;
+    if (imagePath) {
+      await deleteFromSupabase("coupon-banners", imagePath);
     }
-    if (sliderToDelete.logoPublicId) {
-      try {
-        await cloudinary.uploader.destroy(sliderToDelete.logoPublicId);
-      } catch (err) {
-        console.error("Failed to delete slider logo from Cloudinary:", err);
-      }
+    const logoPath = slider.logoStoragePath || slider.logoPublicId;
+    if (logoPath) {
+      await deleteFromSupabase("store-images", logoPath);
     }
 
-    const slider = await Slider.findByIdAndDelete(id);
+    await prisma.slider.delete({
+      where: { id },
+    });
+
     return NextResponse.json({ message: "Slider deleted successfully" });
   } catch (error) {
     console.error("DELETE /api/sliders/[id] Error:", error);

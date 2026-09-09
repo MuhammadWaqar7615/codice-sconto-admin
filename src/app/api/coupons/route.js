@@ -1,75 +1,112 @@
 import { NextResponse } from "next/server";
-import connectMongo from "@/lib/mongodb";
-import Coupon from "@/models/Coupon";
+import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth/auth";
 import { ROLES } from "@/lib/auth/roles";
-import mongoose from "mongoose";
 
-// GET /api/coupons - Fetch all coupons
+function serializeCoupon(c) {
+  return {
+    ...c,
+    _id: c.id,
+    type: c.type ? c.type.toLowerCase() : "code",
+    homepageSection: c.homepageSection ? c.homepageSection.toLowerCase() : "featured",
+    store: c.store ? { ...c.store, _id: c.store.id } : null,
+  };
+}
+
 export async function GET(request) {
   try {
-    // Only admins should ideally see all coupons in one raw list, but for now we'll just check auth
-    // Wait, the instructions say "Admin Coupon List", let's secure it for ADMIN
     await requireRole([ROLES.ADMIN, ROLES.ADMINISTRATION]);
-    
-    await connectMongo();
-    
+
     const { searchParams } = new URL(request.url);
     const storeId = searchParams.get("storeId");
-    
-    let query = {};
-    if (storeId && mongoose.Types.ObjectId.isValid(storeId)) {
-      query.storeId = storeId;
+
+    let where = {};
+    if (storeId) {
+      where.storeId = storeId;
     }
 
-    const coupons = await Coupon.find(query)
-      .populate("storeId", "name slug logoPath")
-      .sort({ createdAt: -1 })
-      .lean();
-      
-    return NextResponse.json({ success: true, data: coupons });
+    const coupons = await prisma.coupon.findMany({
+      where,
+      include: {
+        store: {
+          select: { id: true, name: true, slug: true, logoPath: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: coupons.map(serializeCoupon),
+    });
   } catch (error) {
     console.error("Error fetching coupons:", error);
     if (error.message === "Unauthorized" || error.message === "Forbidden") {
-       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
     return NextResponse.json({ success: false, error: "Server Error" }, { status: 500 });
   }
 }
 
-// POST /api/coupons - Create a new coupon
 export async function POST(request) {
   try {
     await requireRole([ROLES.ADMIN, ROLES.ADMINISTRATION]);
-    await connectMongo();
-    
+
     const body = await request.json();
-    
-    // Validate required fields based on type
-    if (body.type === "code" && !body.code) {
-      return NextResponse.json({ success: false, error: "Coupon code is required for 'code' type" }, { status: 400 });
+
+    const normalizedType = (body.type || "code").toLowerCase();
+    if (normalizedType === "code" && !body.code) {
+      return NextResponse.json(
+        { success: false, error: "Coupon code is required for 'code' type" },
+        { status: 400 }
+      );
     }
-    if (body.type === "link" && !body.couponUrl) {
-      return NextResponse.json({ success: false, error: "Coupon URL is required for 'link' type" }, { status: 400 });
+    if (normalizedType === "link" && !body.couponUrl) {
+      return NextResponse.json(
+        { success: false, error: "Coupon URL is required for 'link' type" },
+        { status: 400 }
+      );
     }
-    
-    const newCoupon = await Coupon.create({
-      ...body,
-      homepageSection: body.homepageSection || "featured",
-      image: body.image || "/images/placeholder.png",
+
+    const newCoupon = await prisma.coupon.create({
+      data: {
+        storeId: body.storeId,
+        type: normalizedType === "link" ? "LINK" : "CODE",
+        title: body.title,
+        description: body.description || "",
+        code: body.code || null,
+        couponUrl: body.couponUrl || null,
+        discount: body.discount || "",
+        terms: body.terms || null,
+        labelTop: body.labelTop || null,
+        labelBottom: body.labelBottom || null,
+        startsAt: body.startsAt ? new Date(body.startsAt) : null,
+        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+        isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
+        isFeatured: body.isFeatured !== undefined ? Boolean(body.isFeatured) : false,
+        homepageSection: (body.homepageSection || "featured").toUpperCase(),
+        image: body.image || "/images/placeholder.png",
+        imageStoragePath: body.imageStoragePath || body.imagePublicId || null,
+      },
+      include: {
+        store: {
+          select: { id: true, name: true, slug: true, logoPath: true },
+        },
+      },
     });
-    
-    return NextResponse.json({ success: true, data: newCoupon }, { status: 201 });
+
+    return NextResponse.json(
+      { success: true, data: serializeCoupon(newCoupon) },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Error creating coupon:", error);
     if (error.message === "Unauthorized" || error.message === "Forbidden") {
-       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
-    // Mongoose validation errors
-    if (error.name === 'ValidationError') {
-       const messages = Object.values(error.errors).map(val => val.message);
-       return NextResponse.json({ success: false, error: messages.join(', ') }, { status: 400 });
-    }
-    return NextResponse.json({ success: false, error: error.message || "Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message || "Server Error" },
+      { status: 500 }
+    );
   }
 }

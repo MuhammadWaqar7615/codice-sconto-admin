@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
-import User from "@/models/User";
-import connectMongo from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth/password";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
@@ -9,12 +7,33 @@ import { ROLES } from "@/lib/auth/roles";
 async function requireAdmin() {
   const session = await getSession();
   if (!session?.user) return { message: "Unauthorized", status: 401 };
-  if (![ROLES.ADMIN, ROLES.ADMINISTRATION].includes(session.user.role)) return { message: "Forbidden", status: 403 };
+  const role = (session.user.role || "").toLowerCase();
+  if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRATION) {
+    return { message: "Forbidden", status: 403 };
+  }
   return null;
 }
 
-function validId(id) {
-  return mongoose.Types.ObjectId.isValid(id);
+function parseRole(role) {
+  const r = (role || "").toLowerCase();
+  if (r === "admin" || r === "administration") return "ADMIN";
+  if (r === "editor") return "EDITOR";
+  return "SUBSCRIBER";
+}
+
+function serializeUser(u) {
+  let role = "subscribor";
+  if (u.role === "ADMIN") role = "administration";
+  else if (u.role === "EDITOR") role = "editor";
+  else if (u.role === "SUBSCRIBER") role = "subscribor";
+
+  const { passwordHash, ...safeUser } = u;
+  return {
+    ...safeUser,
+    _id: u.id,
+    role,
+    status: u.status ? u.status.toLowerCase() : "enabled",
+  };
 }
 
 export async function GET(request, { params }) {
@@ -22,11 +41,12 @@ export async function GET(request, { params }) {
     const authError = await requireAdmin();
     if (authError) return NextResponse.json({ message: authError.message }, { status: authError.status });
     const { id } = await params;
-    if (!validId(id)) return NextResponse.json({ message: "Invalid user ID" }, { status: 400 });
-    await connectMongo();
-    const user = await User.findById(id).select("-passwordHash").lean();
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+    });
     if (!user) return NextResponse.json({ message: "User not found" }, { status: 404 });
-    return NextResponse.json({ user });
+    return NextResponse.json({ user: serializeUser(user) });
   } catch (error) {
     console.error("GET /api/users/[id] Error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
@@ -38,21 +58,43 @@ export async function PUT(request, { params }) {
     const authError = await requireAdmin();
     if (authError) return NextResponse.json({ message: authError.message }, { status: authError.status });
     const { id } = await params;
-    if (!validId(id)) return NextResponse.json({ message: "Invalid user ID" }, { status: 400 });
     const body = await request.json();
-    if (!body.name?.trim() || !body.email?.trim()) return NextResponse.json({ message: "Name and email are required." }, { status: 400 });
-    if (![ROLES.ADMINISTRATION, ROLES.EDITOR, ROLES.SUBSCRIBOR].includes(body.role)) return NextResponse.json({ message: "Invalid role." }, { status: 400 });
 
-    const update = { name: body.name, email: body.email, description: body.description, role: body.role, verified: Boolean(body.verified), status: body.status === "disabled" ? "disabled" : "enabled" };
-    if (body.password) update.passwordHash = await hashPassword(body.password);
-    await connectMongo();
-    const user = await User.findByIdAndUpdate(id, update, { new: true, runValidators: true }).select("-passwordHash").lean();
-    if (!user) return NextResponse.json({ message: "User not found" }, { status: 404 });
-    return NextResponse.json({ user });
+    const currentUser = await prisma.user.findUnique({
+      where: { id },
+    });
+    if (!currentUser) return NextResponse.json({ message: "User not found" }, { status: 404 });
+
+    if (body.email && body.email.trim().toLowerCase() !== currentUser.email) {
+      const emailConflict = await prisma.user.findUnique({
+        where: { email: body.email.trim().toLowerCase() },
+      });
+      if (emailConflict) {
+        return NextResponse.json({ message: "A user with this email already exists." }, { status: 409 });
+      }
+    }
+
+    const updateData = {};
+    if (body.name !== undefined) updateData.name = body.name.trim();
+    if (body.email !== undefined) updateData.email = body.email.trim().toLowerCase();
+    if (body.description !== undefined) updateData.description = body.description || null;
+    if (body.role !== undefined) updateData.role = parseRole(body.role);
+    if (body.verified !== undefined) updateData.verified = Boolean(body.verified);
+    if (body.status !== undefined) {
+      updateData.status = (body.status || "enabled").toUpperCase() === "DISABLED" ? "DISABLED" : "ENABLED";
+    }
+    if (body.password) {
+      updateData.passwordHash = await hashPassword(body.password);
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: updateData,
+    });
+
+    return NextResponse.json({ user: serializeUser(updatedUser) });
   } catch (error) {
     console.error("PUT /api/users/[id] Error:", error);
-    if (error.code === 11000) return NextResponse.json({ message: "A user with this email already exists." }, { status: 409 });
-    if (error.name === "ValidationError") return NextResponse.json({ message: Object.values(error.errors).map((item) => item.message).join(", ") }, { status: 400 });
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -62,10 +104,16 @@ export async function DELETE(request, { params }) {
     const authError = await requireAdmin();
     if (authError) return NextResponse.json({ message: authError.message }, { status: authError.status });
     const { id } = await params;
-    if (!validId(id)) return NextResponse.json({ message: "Invalid user ID" }, { status: 400 });
-    await connectMongo();
-    const user = await User.findByIdAndDelete(id);
-    if (!user) return NextResponse.json({ message: "User not found" }, { status: 404 });
+
+    const userToDelete = await prisma.user.findUnique({
+      where: { id },
+    });
+    if (!userToDelete) return NextResponse.json({ message: "User not found" }, { status: 404 });
+
+    await prisma.user.delete({
+      where: { id },
+    });
+
     return NextResponse.json({ message: "User deleted successfully" });
   } catch (error) {
     console.error("DELETE /api/users/[id] Error:", error);

@@ -1,34 +1,33 @@
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
-import PromoBanner from "@/models/PromoBanner";
-import connectMongo from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
-import cloudinary from "@/lib/cloudinary";
+import { deleteFromSupabase } from "@/lib/supabase";
 
 async function requireAdmin() {
   const session = await getSession();
   if (!session?.user) return { message: "Unauthorized", status: 401 };
-  if (![ROLES.ADMIN, ROLES.ADMINISTRATION].includes(session.user.role)) return { message: "Forbidden", status: 403 };
+  const role = (session.user.role || "").toLowerCase();
+  if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRATION) return { message: "Forbidden", status: 403 };
   return null;
 }
 
-function validId(id) {
-  return mongoose.Types.ObjectId.isValid(id);
-}
-
-function editableFields(body) {
-  return { heading: body.heading, description: body.description, image: body.image, imagePublicId: body.imagePublicId, status: body.status };
+function serializeBanner(b) {
+  return {
+    ...b,
+    _id: b.id,
+    status: b.status ? b.status.toLowerCase() : "enabled",
+  };
 }
 
 export async function GET(request, { params }) {
   try {
     const { id } = await params;
-    if (!validId(id)) return NextResponse.json({ message: "Invalid promo banner ID" }, { status: 400 });
-    await connectMongo();
-    const promoBanner = await PromoBanner.findById(id).lean();
+    const promoBanner = await prisma.promoBanner.findUnique({
+      where: { id },
+    });
     if (!promoBanner) return NextResponse.json({ message: "Promo banner not found" }, { status: 404 });
-    return NextResponse.json({ promoBanner });
+    return NextResponse.json({ promoBanner: serializeBanner(promoBanner) });
   } catch (error) {
     console.error("GET /api/promo-banners/[id] Error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
@@ -40,28 +39,37 @@ export async function PUT(request, { params }) {
     const authError = await requireAdmin();
     if (authError) return NextResponse.json({ message: authError.message }, { status: authError.status });
     const { id } = await params;
-    if (!validId(id)) return NextResponse.json({ message: "Invalid promo banner ID" }, { status: 400 });
     const body = await request.json();
     if (!body.heading?.trim() || !body.description?.trim() || !body.image?.trim()) {
       return NextResponse.json({ message: "Heading, description, and image are required." }, { status: 400 });
     }
-    await connectMongo();
 
-    const currentBanner = await PromoBanner.findById(id);
-    if (currentBanner && currentBanner.imagePublicId && body.imagePublicId && currentBanner.imagePublicId !== body.imagePublicId) {
-      try {
-        await cloudinary.uploader.destroy(currentBanner.imagePublicId);
-      } catch (err) {
-        console.error("Failed to delete old promo banner image from Cloudinary:", err);
-      }
+    const currentBanner = await prisma.promoBanner.findUnique({
+      where: { id },
+    });
+    if (!currentBanner) return NextResponse.json({ message: "Promo banner not found" }, { status: 404 });
+
+    const oldPath = currentBanner.imageStoragePath || currentBanner.imagePublicId;
+    const newPath = body.imageStoragePath || body.imagePublicId;
+    if (oldPath && newPath && oldPath !== newPath) {
+      await deleteFromSupabase("coupon-banners", oldPath);
     }
 
-    const promoBanner = await PromoBanner.findByIdAndUpdate(id, editableFields(body), { new: true, runValidators: true }).lean();
-    if (!promoBanner) return NextResponse.json({ message: "Promo banner not found" }, { status: 404 });
-    return NextResponse.json({ promoBanner });
+    const promoBanner = await prisma.promoBanner.update({
+      where: { id },
+      data: {
+        heading: body.heading,
+        description: body.description,
+        image: body.image,
+        imagePublicId: body.imagePublicId || null,
+        imageStoragePath: newPath || null,
+        status: (body.status || "enabled").toUpperCase() === "DISABLED" ? "DISABLED" : "ENABLED",
+      },
+    });
+
+    return NextResponse.json({ promoBanner: serializeBanner(promoBanner) });
   } catch (error) {
     console.error("PUT /api/promo-banners/[id] Error:", error);
-    if (error.name === "ValidationError") return NextResponse.json({ message: Object.values(error.errors).map((item) => item.message).join(", ") }, { status: 400 });
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -71,21 +79,21 @@ export async function DELETE(request, { params }) {
     const authError = await requireAdmin();
     if (authError) return NextResponse.json({ message: authError.message }, { status: authError.status });
     const { id } = await params;
-    if (!validId(id)) return NextResponse.json({ message: "Invalid promo banner ID" }, { status: 400 });
-    await connectMongo();
 
-    const bannerToDelete = await PromoBanner.findById(id);
+    const bannerToDelete = await prisma.promoBanner.findUnique({
+      where: { id },
+    });
     if (!bannerToDelete) return NextResponse.json({ message: "Promo banner not found" }, { status: 404 });
 
-    if (bannerToDelete.imagePublicId) {
-      try {
-        await cloudinary.uploader.destroy(bannerToDelete.imagePublicId);
-      } catch (err) {
-        console.error("Failed to delete promo banner image from Cloudinary:", err);
-      }
+    const path = bannerToDelete.imageStoragePath || bannerToDelete.imagePublicId;
+    if (path) {
+      await deleteFromSupabase("coupon-banners", path);
     }
 
-    const promoBanner = await PromoBanner.findByIdAndDelete(id);
+    await prisma.promoBanner.delete({
+      where: { id },
+    });
+
     return NextResponse.json({ message: "Promo banner deleted successfully" });
   } catch (error) {
     console.error("DELETE /api/promo-banners/[id] Error:", error);

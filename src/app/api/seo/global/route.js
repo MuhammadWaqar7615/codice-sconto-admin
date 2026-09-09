@@ -1,20 +1,17 @@
 import { NextResponse } from "next/server";
-import connectMongo from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
-import GlobalSeo from "@/models/GlobalSeo";
 
 async function requireAdmin() {
   const session = await getSession();
-
   if (!session?.user) {
     return { message: "Unauthorized", status: 401 };
   }
-
-  if (session.user.role !== ROLES.ADMIN && session.user.role !== ROLES.ADMINISTRATION) {
+  const role = (session.user.role || "").toLowerCase();
+  if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRATION) {
     return { message: "Forbidden", status: 403 };
   }
-
   return null;
 }
 
@@ -32,24 +29,23 @@ function normalizeKeywords(value) {
 
 function normalizeSocialLinks(value = {}) {
   return {
-    facebook: String(value.facebook || "").trim(),
-    instagram: String(value.instagram || "").trim(),
-    linkedin: String(value.linkedin || "").trim(),
-    youtube: String(value.youtube || "").trim(),
-    twitter: String(value.twitter || "").trim(),
+    facebook: String(value?.facebook || "").trim(),
+    instagram: String(value?.instagram || "").trim(),
+    linkedin: String(value?.linkedin || "").trim(),
+    youtube: String(value?.youtube || "").trim(),
+    twitter: String(value?.twitter || "").trim(),
   };
 }
 
 export async function GET() {
   try {
-    await connectMongo();
-    const settings = await GlobalSeo.findOne().lean();
+    const settings = await prisma.globalSeo.findFirst();
 
     return NextResponse.json({
       settings: settings
         ? {
             ...settings,
-            _id: settings._id.toString(),
+            _id: settings.id,
             defaultKeywords: settings.defaultKeywords || [],
             socialLinks: settings.socialLinks || {},
           }
@@ -68,7 +64,6 @@ export async function POST(request) {
       return NextResponse.json({ message: authError.message }, { status: authError.status });
     }
 
-    await connectMongo();
     const body = await request.json();
 
     if (!body.siteName?.trim()) {
@@ -92,20 +87,25 @@ export async function POST(request) {
       socialLinks: normalizeSocialLinks(body.socialLinks),
     };
 
-    const existing = await GlobalSeo.findOne();
-    const settings = existing
-      ? await GlobalSeo.findByIdAndUpdate(existing._id, payload, { new: true, runValidators: true })
-      : await GlobalSeo.create(payload);
+    const existing = await prisma.globalSeo.findFirst();
+    let settings;
+    if (existing) {
+      settings = await prisma.globalSeo.update({
+        where: { id: existing.id },
+        data: payload,
+      });
+    } else {
+      settings = await prisma.globalSeo.create({
+        data: payload,
+      });
+    }
 
     return NextResponse.json({
       message: "Global SEO settings saved successfully.",
-      settings: { ...settings.toObject(), _id: settings._id.toString() },
+      settings: { ...settings, _id: settings.id },
     });
   } catch (error) {
     console.error("POST /api/seo/global Error:", error);
-    if (error.name === "ValidationError") {
-      return NextResponse.json({ message: Object.values(error.errors).map((item) => item.message).join(", ") }, { status: 400 });
-    }
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }

@@ -56,10 +56,13 @@ export default function CouponForm({ stores }) {
     setError("");
     try {
       let imageUrl = formData.image;
+      let imageStoragePath = formData.imageStoragePath || null;
+      let imagePublicId = formData.imagePublicId || null;
       if (imageFile) {
         setUploadingImage(true);
         const imageFormData = new FormData();
         imageFormData.append("file", imageFile);
+        imageFormData.append("bucket", "coupon-banners");
 
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
@@ -73,12 +76,16 @@ export default function CouponForm({ stores }) {
 
         const uploadData = await uploadRes.json();
         imageUrl = uploadData.url;
+        imageStoragePath = uploadData.storagePath;
+        imagePublicId = uploadData.public_id;
         setUploadingImage(false);
       }
 
       const payload = {
         ...formData,
         image: imageUrl,
+        imageStoragePath,
+        imagePublicId,
       };
 
       const response = await fetch("/api/coupons", {
@@ -111,7 +118,7 @@ export default function CouponForm({ stores }) {
           <div>
             <label htmlFor="imageFile" className="mb-1 block text-sm font-medium text-gray-700">Coupon Image (Optional)</label>
             <input type="file" id="imageFile" name="imageFile" accept="image/*" onChange={handleFileChange} className="w-full px-4 py-2 text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition-all file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-accent file:text-white hover:file:bg-accent-hover" />
-            <p className="mt-1 text-xs text-gray-500">Upload an image for this coupon (will be stored in Cloudinary).</p>
+            <p className="mt-1 text-xs text-gray-500">Upload an image for this coupon (will be stored in Supabase Storage).</p>
             {imagePreview && (
               <div className="mt-4">
                 <p className="text-sm text-gray-600 mb-2">Image Preview:</p>

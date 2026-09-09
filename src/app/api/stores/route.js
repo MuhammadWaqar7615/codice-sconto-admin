@@ -1,39 +1,54 @@
 import { NextResponse } from "next/server";
-import Store from "@/models/Store";
-import connectMongo from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { ROLES } from "@/lib/auth/roles";
 
 export async function GET(request) {
   try {
-    await connectMongo();
-
     const { searchParams } = new URL(request.url);
     const active = searchParams.get("active");
     const search = searchParams.get("search");
     const letter = searchParams.get("letter");
 
-    let query = {};
+    let where = {};
     if (active === "true") {
-      query.isActive = true;
+      where.isActive = true;
     } else if (active === "false") {
-      query.isActive = false;
+      where.isActive = false;
     }
 
     if (search) {
-      query.name = { $regex: search, $options: "i" };
+      where.name = { contains: search, mode: "insensitive" };
     }
-    
+
     if (letter) {
       if (letter === "#") {
-        query.name = { ...query.name, $not: /^[a-zA-Z]/ };
+        // Not starting with A-Z
+        where.AND = "abcdefghijklmnopqrstuvwxyz".split("").map((char) => ({
+          NOT: { name: { startsWith: char, mode: "insensitive" } },
+        }));
       } else {
-        query.name = { ...query.name, $regex: `^${letter}`, $options: "i" };
+        where.name = { ...where.name, startsWith: letter, mode: "insensitive" };
       }
     }
 
-    const stores = await Store.find(query).sort({ name: 1 });
-    return NextResponse.json({ stores }, { status: 200 });
+    const stores = await prisma.store.findMany({
+      where,
+      orderBy: { name: "asc" },
+      include: {
+        categories: { select: { categoryId: true } },
+        subcategories: { select: { subcategoryId: true } },
+      },
+    });
+
+    const serializedStores = stores.map((s) => ({
+      ...s,
+      _id: s.id,
+      categories: s.categories.map((c) => c.categoryId),
+      subcategories: s.subcategories.map((sc) => sc.subcategoryId),
+    }));
+
+    return NextResponse.json({ stores: serializedStores }, { status: 200 });
   } catch (error) {
     console.error("GET /api/stores Error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
@@ -42,19 +57,17 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    // Only Admin can create stores
     const session = await getSession();
     if (!session || !session.user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
-    if (session.user.role !== ROLES.ADMIN) {
+    const role = (session.user.role || "").toLowerCase();
+    if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRATION) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
-    await connectMongo();
     const data = await request.json();
 
-    // Check for required fields
     if (!data.name || !data.slug || !data.logoPath) {
       return NextResponse.json(
         { message: "Name, slug, and logo are required." },
@@ -62,8 +75,9 @@ export async function POST(request) {
       );
     }
 
-    // Check for duplicate slug
-    const existingStore = await Store.findOne({ slug: data.slug });
+    const existingStore = await prisma.store.findUnique({
+      where: { slug: data.slug },
+    });
     if (existingStore) {
       return NextResponse.json(
         { message: "A store with this slug already exists." },
@@ -71,12 +85,43 @@ export async function POST(request) {
       );
     }
 
-    const newStore = await Store.create({
-      ...data,
-      seoTitle: data.seoTitle,
-      seoDescription: data.seoDescription,
+    const {
+      categories = [],
+      subcategories = [],
+      id,
+      _id,
+      createdAt,
+      updatedAt,
+      ...storeFields
+    } = data;
+
+    const newStore = await prisma.store.create({
+      data: {
+        ...storeFields,
+        seoTitle: data.seoTitle || null,
+        seoDescription: data.seoDescription || null,
+        logoStoragePath: data.logoStoragePath || data.logoPublicId || null,
+        categories: categories.length > 0 ? {
+          create: categories.map((catId) => ({ categoryId: catId })),
+        } : undefined,
+        subcategories: subcategories.length > 0 ? {
+          create: subcategories.map((subId) => ({ subcategoryId: subId })),
+        } : undefined,
+      },
+      include: {
+        categories: { select: { categoryId: true } },
+        subcategories: { select: { subcategoryId: true } },
+      },
     });
-    return NextResponse.json({ store: newStore }, { status: 201 });
+
+    const responseStore = {
+      ...newStore,
+      _id: newStore.id,
+      categories: newStore.categories.map((c) => c.categoryId),
+      subcategories: newStore.subcategories.map((sc) => sc.subcategoryId),
+    };
+
+    return NextResponse.json({ store: responseStore }, { status: 201 });
   } catch (error) {
     console.error("POST /api/stores Error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });

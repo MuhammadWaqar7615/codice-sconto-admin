@@ -1,23 +1,19 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/auth";
 import { ROLES } from "@/lib/auth/roles";
-import connectMongo from "@/lib/mongodb";
-import GlobalSeo from "@/models/GlobalSeo";
-import SeoPage from "@/models/SeoPage";
-import Redirect from "@/models/Redirect";
+import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "SEO Dashboard | CodiceSconto Admin" };
 
 export default async function SeoDashboardPage() {
   await requireRole([ROLES.ADMIN, ROLES.ADMINISTRATION]);
-  await connectMongo();
 
   const [globalSeo, pageSeoCount, activePageSeoCount, redirectCount, activeRedirectCount] = await Promise.all([
-    GlobalSeo.findOne().lean(),
-    SeoPage.countDocuments(),
-    SeoPage.countDocuments({ isActive: true }),
-    Redirect.countDocuments(),
-    Redirect.countDocuments({ isActive: true }),
+    prisma.globalSeo.findFirst(),
+    prisma.seoPage.count(),
+    prisma.seoPage.count({ where: { isActive: true } }),
+    prisma.redirect.count(),
+    prisma.redirect.count({ where: { isActive: true } }),
   ]);
 
   const cards = [
@@ -58,29 +54,15 @@ export default async function SeoDashboardPage() {
             <h2 className="text-lg font-semibold text-slate-900">Quick actions</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {quickLinks.map((link) => (
-                <Link key={link.href} href={link.href} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-100">
-                  {link.label}
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-4 transition hover:border-slate-300 hover:bg-white"
+                >
+                  <p className="text-sm font-semibold text-slate-900">{link.label}</p>
                 </Link>
               ))}
             </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Status</h2>
-            <ul className="mt-4 space-y-3 text-sm text-slate-700">
-              <li className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700">
-                <span>Global SEO</span>
-                <span>{globalSeo ? "Ready" : "Missing"}</span>
-              </li>
-              <li className="flex items-center justify-between rounded-lg bg-sky-50 px-3 py-2 text-sky-700">
-                <span>Page SEO</span>
-                <span>{pageSeoCount > 0 ? "Configured" : "Empty"}</span>
-              </li>
-              <li className="flex items-center justify-between rounded-lg bg-violet-50 px-3 py-2 text-violet-700">
-                <span>Redirects</span>
-                <span>{redirectCount > 0 ? "Tracked" : "None"}</span>
-              </li>
-            </ul>
           </div>
         </section>
       </div>
