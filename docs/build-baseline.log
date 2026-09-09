@@ -1,0 +1,109 @@
+
+> condice-sconto-site-clone@0.1.0 build
+> next build
+
+▲ Next.js 16.3.1 (Turbopack)
+- Environments: .env
+✓ Running next.config.mjs took 23ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 7.1s
+  Running TypeScript ...
+  Finished TypeScript in 22ms ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/58) ...
+  Generating static pages using 7 workers (14/58) 
+  Generating static pages using 7 workers (28/58) 
+  Generating static pages using 7 workers (43/58) 
+✓ Generating static pages using 7 workers (58/58) in 4.6s
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /account/login
+├ ○ /account/registrati
+├ ƒ /api/auth/login
+├ ƒ /api/auth/logout
+├ ƒ /api/badges
+├ ƒ /api/badges/[id]
+├ ƒ /api/blog
+├ ƒ /api/blog/[id]
+├ ƒ /api/categories
+├ ƒ /api/categories/[id]
+├ ƒ /api/coupons
+├ ƒ /api/coupons/[id]
+├ ƒ /api/email-templates
+├ ƒ /api/email-templates/[key]
+├ ƒ /api/features
+├ ƒ /api/promo-banners
+├ ƒ /api/promo-banners/[id]
+├ ƒ /api/search
+├ ƒ /api/seo/global
+├ ƒ /api/seo/pages
+├ ƒ /api/seo/pages/[id]
+├ ƒ /api/seo/redirects
+├ ƒ /api/seo/redirects/[id]
+├ ƒ /api/seo/robots
+├ ƒ /api/seo/sitemap
+├ ƒ /api/settings
+├ ƒ /api/sliders
+├ ƒ /api/sliders/[id]
+├ ƒ /api/stores
+├ ƒ /api/stores/[id]
+├ ƒ /api/stores/[id]/coupons
+├ ƒ /api/stores/bulk-delete
+├ ƒ /api/subcategories
+├ ƒ /api/subcategories/[id]
+├ ƒ /api/theme
+├ ƒ /api/translations
+├ ƒ /api/upload
+├ ƒ /api/users
+├ ƒ /api/users/[id]
+├ ƒ /dashboard
+├ ƒ /dashboard/badges
+├ ƒ /dashboard/badges/[id]/edit
+├ ƒ /dashboard/badges/new
+├ ƒ /dashboard/blog
+├ ƒ /dashboard/blog/[id]/edit
+├ ƒ /dashboard/blog/new
+├ ƒ /dashboard/categories
+├ ƒ /dashboard/categories/[id]/edit
+├ ○ /dashboard/categories/new
+├ ƒ /dashboard/coupons
+├ ○ /dashboard/coupons/new
+├ ƒ /dashboard/email-templates
+├ ƒ /dashboard/promo-banners
+├ ƒ /dashboard/promo-banners/[id]/edit
+├ ƒ /dashboard/promo-banners/new
+├ ƒ /dashboard/seo/dashboard
+├ ƒ /dashboard/seo/global
+├ ƒ /dashboard/seo/pages
+├ ƒ /dashboard/seo/pages/[id]
+├ ƒ /dashboard/seo/pages/[id]/edit
+├ ƒ /dashboard/seo/pages/new
+├ ƒ /dashboard/seo/redirects
+├ ƒ /dashboard/seo/redirects/[id]
+├ ƒ /dashboard/seo/redirects/[id]/edit
+├ ƒ /dashboard/seo/redirects/new
+├ ƒ /dashboard/seo/robots
+├ ƒ /dashboard/seo/sitemap
+├ ƒ /dashboard/settings
+├ ƒ /dashboard/sliders
+├ ƒ /dashboard/sliders/[id]/edit
+├ ƒ /dashboard/sliders/new
+├ ƒ /dashboard/stores/[id]/edit
+├ ○ /dashboard/stores/new
+├ ƒ /dashboard/subcategories
+├ ƒ /dashboard/subcategories/[id]/edit
+├ ƒ /dashboard/subcategories/new
+├ ƒ /dashboard/theme
+├ ƒ /dashboard/translations
+├ ƒ /dashboard/users
+├ ƒ /dashboard/users/[id]/edit
+└ ƒ /dashboard/users/new
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
