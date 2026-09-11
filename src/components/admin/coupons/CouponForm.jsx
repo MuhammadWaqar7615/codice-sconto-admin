@@ -58,6 +58,7 @@ export default function CouponForm({ stores }) {
       let imageUrl = formData.image;
       let imageStoragePath = formData.imageStoragePath || null;
       let imagePublicId = formData.imagePublicId || null;
+
       if (imageFile) {
         setUploadingImage(true);
         const imageFormData = new FormData();
